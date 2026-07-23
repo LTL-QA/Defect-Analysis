@@ -1,0 +1,2072 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LANKATILES | Tile Defect Analysis System</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+  :root{
+    --bg: #eef1f1;
+    --panel: #ffffff;
+    --panel-line: #dde3e3;
+    --ink: #1c2b2b;
+    --ink-soft: #5b6b6b;
+    --teal: #0f6e6e;
+    --teal-deep: #0a4f4f;
+    --slate: #35618a;
+    --amber: #c1841f;
+    --terracotta: #b1452a;
+    --good: #2f7d52;
+    --bg-2nd: #eaf1f7;
+    --bg-c: #fbf1e2;
+    --bg-dam: #fbeae6;
+    --radius: 10px;
+    --font-ui: 'Inter', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:var(--font-ui);
+    background:var(--bg);
+    color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---------- Header ---------- */
+  header{
+    background:linear-gradient(135deg, var(--teal-deep), var(--teal));
+    color:#fff;
+    padding:18px 22px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:10px;
+    box-shadow:0 2px 10px rgba(10,60,60,0.25);
+  }
+  .brand{display:flex; align-items:center; gap:12px;}
+  .brand .mark, .login-brand .mark{
+    width:38px; height:38px; border-radius:6px;
+    object-fit:contain; flex-shrink:0; display:block;
+  }
+  .brand h1{font-size:15px; margin:0; letter-spacing:0.06em; font-weight:800;}
+  .brand p{margin:0; font-size:11.5px; opacity:0.85; letter-spacing:0.03em;}
+  .header-meta{font-family:var(--font-mono); font-size:11.5px; opacity:0.9; text-align:right;}
+
+  /* ---------- Tabs ---------- */
+  nav.tabs{
+    display:flex; gap:4px; padding:10px 22px 0; background:var(--bg);
+    border-bottom:1px solid var(--panel-line); flex-wrap:wrap;
+  }
+  nav.tabs button{
+    border:none; background:transparent; padding:10px 16px; font-family:var(--font-ui);
+    font-weight:600; font-size:13px; color:var(--ink-soft); cursor:pointer;
+    border-bottom:3px solid transparent; letter-spacing:0.02em;
+  }
+  nav.tabs button.active{ color:var(--teal-deep); border-bottom-color:var(--teal); }
+
+  main{ padding:18px 22px 90px; max-width:1400px; margin:0 auto; }
+  .view{ display:none; } .view.active{ display:block; }
+
+  .card{
+    background:var(--panel); border:1px solid var(--panel-line); border-radius:var(--radius);
+    padding:16px 18px; margin-bottom:16px;
+  }
+  .card h2{
+    font-size:12.5px; text-transform:uppercase; letter-spacing:0.08em; color:var(--ink-soft);
+    margin:0 0 12px; font-weight:700; display:flex; align-items:center; gap:8px;
+  }
+  .card h2 .n{
+    background:var(--teal); color:#fff; width:20px; height:20px; border-radius:5px;
+    display:inline-flex; align-items:center; justify-content:center; font-size:11px; font-family:var(--font-mono);
+  }
+
+  /* ---------- Job info form ---------- */
+  .jobgrid{ display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; }
+  .filter-actions{ flex-wrap:wrap; row-gap:8px; }
+  .field label{ display:block; font-size:11px; color:var(--ink-soft); font-weight:600; margin-bottom:5px; text-transform:uppercase; letter-spacing:0.04em;}
+  .field input, .field select{
+    width:100%; height:38px; padding:0 10px; border:1px solid var(--panel-line); border-radius:7px;
+    font-family:var(--font-mono); font-size:13px; background:#fbfcfc; color:var(--ink);
+  }
+  .field input:focus, .field select:focus{ outline:2px solid var(--teal); outline-offset:1px; border-color:var(--teal);}
+  .field input[readonly]{ background:#eef2f2; color:var(--ink-soft); font-weight:600; cursor:not-allowed; }
+
+  .suggest-list{
+    position:absolute; top:100%; left:0; right:0; margin-top:4px; z-index:20;
+    background:#fff; border:1px solid var(--panel-line); border-radius:8px;
+    box-shadow:0 6px 18px rgba(10,40,40,0.12); overflow:hidden; display:none;
+  }
+  .suggest-list.show{ display:block; }
+  .suggest-item{
+    padding:8px 10px; font-family:var(--font-mono); font-size:12.5px; cursor:pointer;
+    border-bottom:1px solid #f0f3f3;
+  }
+  .suggest-item:last-child{ border-bottom:none; }
+  .suggest-item:hover, .suggest-item.hi{ background:var(--bg-2nd); color:var(--slate); }
+  .suggest-empty{ padding:8px 10px; font-size:12px; color:var(--ink-soft); }
+
+  /* ---------- Defect table ---------- */
+  .table-wrap{ overflow-x:auto; border:1px solid var(--panel-line); border-radius:8px; }
+  table.defects{ border-collapse:collapse; width:100%; min-width:1180px; font-size:12.5px; }
+  table.defects thead th{
+    background:#f2f5f5; color:var(--ink-soft); font-weight:700; text-transform:uppercase;
+    font-size:10px; letter-spacing:0.03em; padding:8px 6px; border-bottom:2px solid var(--panel-line);
+    position:sticky; top:0; text-align:center;
+  }
+  table.defects thead tr.grp th{ background:#e7edec; font-size:10.5px; }
+  table.defects thead th.grp-2nd{ background:var(--bg-2nd); color:var(--slate); }
+  table.defects thead th.grp-c{ background:var(--bg-c); color:var(--amber); }
+  table.defects thead th.grp-dam{ background:var(--bg-dam); color:var(--terracotta); }
+  table.defects td{ padding:5px 6px; border-bottom:1px solid #eef1f1; text-align:center; font-family:var(--font-mono); white-space:nowrap;}
+  table.defects td.desc{ text-align:left; font-family:var(--font-ui); font-weight:500; white-space:normal; min-width:210px; }
+  table.defects td.num{ color:var(--ink-soft); }
+  table.defects tbody tr:hover{ background:#f7faf9; }
+  table.defects input.qty{
+    width:62px; padding:4px 5px; border:1px solid var(--panel-line); border-radius:5px;
+    font-family:var(--font-mono); text-align:right; font-size:12.5px;
+  }
+  table.defects input.qty:focus{ outline:none; border-color:var(--teal); }
+  table.defects input.qty.filled{ background:#fff4de; border-color:var(--amber); font-weight:700; color:var(--terracotta); }
+  table.defects td:has(input.qty.filled){ background:#fffaf1; }
+  table.defects td.filled-cell{ background:#fff4de; border-color:var(--amber); font-weight:700; color:var(--terracotta); }
+  .remove-defect-btn{
+    width:24px; height:24px; border-radius:6px; border:1px solid var(--panel-line); background:#fff;
+    color:var(--ink-soft); cursor:pointer; font-size:12px; line-height:1; display:flex; align-items:center; justify-content:center;
+  }
+  .remove-defect-btn:hover{ background:var(--terracotta); color:#fff; border-color:var(--terracotta); }
+  td.impact-total{ font-weight:700; }
+  .bar-cell{ display:flex; align-items:center; gap:6px; min-width:90px; }
+  .bar-track{ flex:1; height:6px; background:#e5eaea; border-radius:3px; overflow:hidden; }
+  .bar-fill{ height:100%; background:var(--terracotta); border-radius:3px; }
+  tfoot td{ font-weight:700; background:#f2f5f5; border-top:2px solid var(--panel-line); }
+
+  /* ---------- Summary grid ---------- */
+  .sumgrid{ display:grid; grid-template-columns:repeat(3, 1fr); gap:14px; }
+  .sumgroup{ border:1px solid var(--panel-line); border-radius:8px; padding:12px; }
+  .sumgroup.g-1{ border-top:3px solid var(--good); }
+  .sumgroup.g-2{ border-top:3px solid var(--slate); }
+  .sumgroup.g-c{ border-top:3px solid var(--amber); }
+  .sumgroup.g-d{ border-top:3px solid var(--terracotta); }
+  .sumgroup h3{ font-size:11.5px; margin:0 0 8px; font-weight:700; }
+  .sumrow{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:7px; }
+  .sumrow label{ font-size:12px; color:var(--ink-soft); flex:1; }
+  .sumrow input{
+    width:78px; padding:5px 7px; border:1px solid var(--panel-line); border-radius:6px;
+    font-family:var(--font-mono); text-align:right; font-size:12.5px;
+  }
+  .sumrow input:focus{ outline:none; border-color:var(--teal); }
+  .sumrow .pctbadge{
+    width:52px; text-align:right; font-family:var(--font-mono); font-size:12px;
+    color:var(--ink-soft); font-weight:600; flex-shrink:0;
+  }
+  .sumtotal{ margin-top:8px; padding-top:8px; border-top:1px dashed var(--panel-line); display:flex; justify-content:space-between; font-weight:700; font-size:12.5px;}
+
+  /* ---------- KPI cards ---------- */
+  .kpis{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:16px; }
+  .kpis-3{ grid-template-columns:repeat(3,1fr); }
+  .kpi{ background:var(--panel); border:1px solid var(--panel-line); border-radius:var(--radius); padding:16px; }
+  .kpi .label{ font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--ink-soft); font-weight:700; }
+  .kpi .value{ font-family:var(--font-mono); font-size:26px; font-weight:700; margin-top:6px; }
+  .kpi.good .value{ color:var(--good); }
+  .kpi.c .value{ color:var(--amber); }
+  .kpi.dam .value{ color:var(--terracotta); }
+  .kpi.total .value{ color:var(--teal-deep); }
+
+  .chart-grid{ display:grid; grid-template-columns:1.6fr 1fr; gap:16px; }
+  .chart-grid-equal{ grid-template-columns:1fr 1fr; }
+  .chart-box{ position:relative; height:340px; }
+  .chart-box-tall{ height:420px; }
+
+  /* ---------- Buttons ---------- */
+  .actions{ display:flex; gap:10px; justify-content:flex-end; margin-top:4px; flex-wrap:wrap; }
+  button.btn{
+    font-family:var(--font-ui); font-weight:700; font-size:13px; padding:10px 18px;
+    border-radius:8px; border:1px solid transparent; cursor:pointer;
+  }
+  button.btn.primary{ background:var(--teal); color:#fff; }
+  button.btn.primary:hover{ background:var(--teal-deep); }
+  button.btn.ghost{ background:#fff; color:var(--ink); border-color:var(--panel-line); }
+  button.btn.ghost:hover{ background:#f2f5f5; }
+  button.btn:disabled{ opacity:0.5; cursor:not-allowed; }
+
+  #saveStatus{ font-size:12px; color:var(--ink-soft); align-self:center; margin-right:auto; }
+
+  /* ---------- Records ---------- */
+  table.records{ width:100%; border-collapse:collapse; font-size:12.5px; }
+  table.records th{ text-align:left; padding:8px 10px; background:#f2f5f5; color:var(--ink-soft); text-transform:uppercase; font-size:10px; letter-spacing:0.04em; }
+  table.records td{ padding:8px 10px; border-bottom:1px solid #eef1f1; font-family:var(--font-mono); }
+  table.records tr:hover{ background:#f7faf9; }
+
+  /* ---------- Analysis Summary (receipt-style) ---------- */
+  table.summary-table{ width:100%; border-collapse:collapse; font-size:13px; }
+  .analysis-grid{ display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:start; }
+
+  /* ---------- AI Assistant ---------- */
+  .ai-question-grid{ display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; }
+  .ai-question{
+    display:flex; flex-direction:column; align-items:flex-start; gap:8px; text-align:left;
+    background:#fbfcfc; border:1px solid var(--panel-line); border-radius:10px; padding:14px 16px;
+    font-family:var(--font-ui); font-size:13px; font-weight:600; color:var(--ink); cursor:pointer;
+    transition:border-color 0.15s, background 0.15s;
+  }
+  .ai-question:hover{ border-color:var(--teal); background:#f2f8f8; }
+  .ai-question.active{ border-color:var(--teal); background:#eaf4f4; }
+  .ai-q-icon{ font-size:20px; }
+  .ai-loading{ color:var(--ink-soft); font-size:13px; padding:10px 0; }
+  .ai-summary-line{ font-size:13.5px; color:var(--ink); margin-bottom:14px; line-height:1.6; }
+  .ai-summary-line b{ color:var(--teal-deep); }
+  .ai-variation-controls{ display:flex; gap:10px; align-items:flex-end; margin-bottom:16px; flex-wrap:wrap; }
+  .ai-variation-controls .field{ min-width:220px; }
+  .summary-table-inner{ width:100%; max-width:560px; border:1px solid var(--panel-line); border-radius:8px; overflow:hidden; }
+  table.summary-table td{ padding:9px 14px; border-bottom:1px solid var(--panel-line); font-family:var(--font-mono); }
+  table.summary-table td.label{ font-family:var(--font-ui); font-weight:600; color:var(--ink-soft); width:45%; border-right:1px solid var(--panel-line); }
+  table.summary-table td.value{ text-align:right; font-weight:600; }
+  table.summary-table tr.info td{ border-bottom:1px solid var(--panel-line); }
+  table.summary-table tr.spacer td{ border:none; padding:6px 0; }
+  table.summary-table tr.group-header td{
+    font-family:var(--font-ui); font-weight:800; font-size:14.5px;
+    border-top:2px solid currentColor; border-bottom:2px solid currentColor; padding:9px 14px;
+  }
+  table.summary-table tr.group-header.yield td{ color:var(--teal-deep); }
+  table.summary-table tr.group-header.cgrade td{ color:var(--amber); }
+  table.summary-table tr.group-header.damage td{ color:var(--terracotta); }
+  table.summary-table tr.sub-item td{ font-family:var(--font-ui); font-weight:500; padding-left:26px; }
+  table.summary-table tr.sub-item td.value{ font-family:var(--font-mono); font-weight:600; color:var(--ink-soft); }
+  table.summary-table tr.empty-note td{ color:var(--ink-soft); font-style:italic; font-weight:400; border-top:none; }
+
+  @media (max-width:900px){
+    .jobgrid{ grid-template-columns:repeat(2,1fr); }
+    .sumgrid{ grid-template-columns:1fr; }
+    .kpis{ grid-template-columns:repeat(2,1fr); }
+    .kpis-3{ grid-template-columns:repeat(2,1fr); }
+    .chart-grid{ grid-template-columns:1fr; }
+    .chart-grid-equal{ grid-template-columns:1fr; }
+    .analysis-grid{ grid-template-columns:1fr; }
+    .ai-question-grid{ grid-template-columns:repeat(2,1fr); }
+  }
+
+  /* ---------- Phone ---------- */
+  @media (max-width:640px){
+    header{ padding:14px 14px; }
+    .brand h1{ font-size:13.5px; }
+    .brand p{ font-size:10.5px; }
+
+    /* Mobile browsers auto-zoom the whole page when a focused input's
+       font-size is under 16px — bumping every data-entry field to 16px
+       here stops that zoom without affecting the desktop layout. */
+    .field input, .field select,
+    .sumrow input,
+    table.defects input.qty{ font-size:16px; }
+    .sumrow input{ width:96px; padding:6px 8px; }
+    table.defects input.qty{ width:72px; padding:6px 6px; }
+    .header-meta{ font-size:10.5px; text-align:left; width:100%; }
+
+    nav.tabs{
+      padding:8px 10px 0; flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch;
+      scrollbar-width:none;
+    }
+    nav.tabs::-webkit-scrollbar{ display:none; }
+    nav.tabs button{ padding:9px 12px; font-size:12px; white-space:nowrap; flex-shrink:0; }
+
+    main{ padding:12px 12px 80px; }
+    .card{ padding:13px 12px; margin-bottom:12px; }
+    .card h2{ font-size:11.5px; flex-wrap:wrap; }
+
+    .jobgrid{ grid-template-columns:1fr 1fr; gap:10px; }
+    .sumgrid{ gap:10px; }
+    .sumgroup{ padding:10px; }
+    .kpis, .kpis-3{ grid-template-columns:1fr 1fr; gap:8px; }
+    .kpi{ padding:12px; }
+    .kpi .value{ font-size:20px; }
+
+    table.defects{ font-size:11px; min-width:900px; }
+    table.records{ font-size:11px; }
+    table.records th, table.records td{ padding:7px 8px; }
+
+    .chart-box{ height:280px; }
+    .chart-box-tall{ height:340px; }
+
+    .actions{ justify-content:stretch; }
+    .actions button.btn{ flex:1; }
+    #saveStatus{ width:100%; margin-right:0; order:-1; }
+    .filter-grid{ grid-template-columns:1fr; }
+    .filter-actions{ justify-content:stretch !important; }
+    .filter-actions #filterStatus, .filter-actions #analysisFilterStatus{ width:100%; order:-1; margin-bottom:2px; }
+    .filter-actions button.btn{ flex:1; }
+    .ai-question-grid{ grid-template-columns:1fr; }
+  }
+
+  /* ---------- Login Screen ---------- */
+  .login-screen{
+    position:fixed; inset:0; z-index:100;
+    background:linear-gradient(135deg, var(--teal-deep), var(--teal));
+    display:flex; align-items:center; justify-content:center; padding:20px;
+  }
+  .login-card{
+    background:#fff; border-radius:14px; padding:32px 28px; width:100%; max-width:380px;
+    box-shadow:0 20px 50px rgba(10,40,40,0.35);
+  }
+  .login-brand{ display:flex; align-items:center; gap:12px; margin-bottom:22px; }
+  .login-brand h1{ font-size:15px; margin:0; letter-spacing:0.06em; font-weight:800; color:var(--ink); }
+  .login-brand p{ margin:0; font-size:11px; color:var(--ink-soft); }
+  .login-card h2{ font-size:15px; margin:0 0 18px; color:var(--ink); font-weight:700; }
+  .login-card .field{ margin-bottom:14px; }
+  .login-error{
+    color:var(--terracotta); font-size:12.5px; min-height:18px; margin-top:2px;
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN SCREEN ============ -->
+<div id="loginScreen" class="login-screen">
+  <div class="login-card">
+    <div class="login-brand">
+      <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAlgAAAJYCAMAAACJuGjuAAAAFVBMVEXw8/ruiI/tXWPsIifsSU7ue4Hvr7YP1rVXAAAEtElEQVR42u3dwRGAMAgAQRND+i/ZBvTF6BCzWwED9+c4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXtE6KU1Dt/pJSteQsIQlLGEJS1gIS1jCEpawhIWwhCUsYQlLWAhLWMISlrCEhbCEJSxhCUtYCEtYwhKWsISFsIQlLGEJS1gIS1jCEpawhCUshCUsYQlLWMJCWMISlrCEJSyEJSxhCUtYwkJYwhKWsIQlLIQlLGEJS1jCQljCEpawhCUshCUsYQlLWMJCWMISlrCEJSyEJSxhCUtYwkJYwhKWsIQlLIQlLGEJS1jCQljCEpawhCUshCUsYf0grBGLG8IqGVasvoAQlrCEJSxhCUtYwhKWsIQlLGEJS1jCEpawhCUsYQlLWMISlrCEJSxhCUtYwhKWsIQlLGEJS1jCEpawhCUsYQlLWMISlrCEJSxhCUtYwhKWsIQlLGEJS1jCEpawhCUsYQlLWMISlrCEJSxhCUtYwhKWsIQlLGEJS1jCEpawhCUsYQlLWMISVjqs+d0fkymsjcLKnrDmVMISlrCEJSxhCQthCUtYwhKWsBCWsIQlLGEJC2EJS1jCEpawEJawhCUsYQkLYQlLWMISlrAQlrCEJSxhCQthCUtYwhKWsIQlLGEJS1jCEpawhCUsYQlLWMISlrCEJSxhCUtYwhKWsIQlLGEJS1jCEpawhCUsYQlLWMISlrCEJSxhCUtYwhKWsIQlLGEJS1jCEpawhCUsYQlLWMISlrCEJSxhCUtYwhKWsIQlLGEJS1jCEpawhCUsYQlLWMISlrCEJSxhCUtYwhKWsIQlLGEJS1jCEpawhCUsYQlLWMISlrCEJSxhCUtYwhKWsIQlLGEJS1jCEpawhCUsYQlLWMISlrCEJSxhCUtYwhKWsIQlLGEJS1gIS1jCEpawhIWwhCUsYQlLWAhLWMISlrCEhbCEJSxhCUtYCEtYwhKWsISFsIQlLGEJ68mMz0xhbRRWTcISlrCEJSxhCUtYwhKWsIQlLGEJS1jCEpawhCUsYQlLWMISlrCEJSxhCUtYwhKWsIQlLGEJS1jCEpawhCUsYQlLWMISlrCEJSxhCUtYwhKWsIQlLGEJS1jCEpawhCUsYQlLWMISlrCEJSxhCUtYwhKWsIQlLGEJS1jCEpawhCUsYQlLWMJ6MGJxQ1glw9qesIQlLGEJS1jCQljCEpawhCUshCUsYQlLWMJCWMISlrCEJSyEJSxhCUtYwkJYwhKWsIQlLIQlLGEJS1jCQljCEpawhCUsYSEsYQlLWMISFsISlrCEJSxhISxhCUtYwhIWwhKWsIQlLGEhLGEJS1jCEhbCEpawhCUsYSEsYQlLWMISFsISlrCEJSxhISxhCUtYwhIWwhKWsIQlLGEhLGEJS1jCEhbCEpawhCUsYSEsYQmrgtZJaRoCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADecQHV1ZxC0wDtPAAAAABJRU5ErkJggg==" alt="Lanka Tiles" class="mark">
+      <div>
+        <h1>LANKATILES · Defect Analysis System</h1>
+        <p>Ranala Plant · Sorting / QA</p>
+      </div>
+    </div>
+    <h2>Sign in to continue</h2>
+    <form id="loginForm">
+      <div class="field">
+        <label>Email</label>
+        <input type="email" id="loginEmail" autocomplete="username" required>
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input type="password" id="loginPassword" autocomplete="current-password" required>
+      </div>
+      <div id="loginError" class="login-error"></div>
+      <button type="submit" class="btn primary" id="loginSubmit" style="width:100%; margin-top:6px;">Sign In</button>
+    </form>
+  </div>
+</div>
+
+<!-- ============ DASHBOARD (hidden until signed in) ============ -->
+<div id="appContent" style="display:none;">
+
+<header>
+  <div class="brand">
+    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAlgAAAJYCAMAAACJuGjuAAAAFVBMVEXw8/ruiI/tXWPsIifsSU7ue4Hvr7YP1rVXAAAEtElEQVR42u3dwRGAMAgAQRND+i/ZBvTF6BCzWwED9+c4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXtE6KU1Dt/pJSteQsIQlLGEJS1gIS1jCEpawhIWwhCUsYQlLWAhLWMISlrCEhbCEJSxhCUtYCEtYwhKWsISFsIQlLGEJS1gIS1jCEpawhCUshCUsYQlLWMJCWMISlrCEJSyEJSxhCUtYwkJYwhKWsIQlLIQlLGEJS1jCQljCEpawhCUshCUsYQlLWMJCWMISlrCEJSyEJSxhCUtYwkJYwhKWsIQlLIQlLGEJS1jCQljCEpawhCUshCUsYf0grBGLG8IqGVasvoAQlrCEJSxhCUtYwhKWsIQlLGEJS1jCEpawhCUsYQlLWMISlrCEJSxhCUtYwhKWsIQlLGEJS1jCEpawhCUsYQlLWMISlrCEJSxhCUtYwhKWsIQlLGEJS1jCEpawhCUsYQlLWMISlrCEJSxhCUtYwhKWsIQlLGEJS1jCEpawhCUsYQlLWMISVjqs+d0fkymsjcLKnrDmVMISlrCEJSxhCQthCUtYwhKWsBCWsIQlLGEJC2EJS1jCEpawEJawhCUsYQkLYQlLWMISlrAQlrCEJSxhCQthCUtYwhKWsIQlLGEJS1jCEpawhCUsYQlLWMISlrCEJSxhCUtYwhKWsIQlLGEJS1jCEpawhCUsYQlLWMISlrCEJSxhCUtYwhKWsIQlLGEJS1jCEpawhCUsYQlLWMISlrCEJSxhCUtYwhKWsIQlLGEJS1jCEpawhCUsYQlLWMISlrCEJSxhCUtYwhKWsIQlLGEJS1jCEpawhCUsYQlLWMISlrCEJSxhCUtYwhKWsIQlLGEJS1jCEpawhCUsYQlLWMISlrCEJSxhCUtYwhKWsIQlLGEJS1gIS1jCEpawhIWwhCUsYQlLWAhLWMISlrCEhbCEJSxhCUtYCEtYwhKWsISFsIQlLGEJ68mMz0xhbRRWTcISlrCEJSxhCUtYwhKWsIQlLGEJS1jCEpawhCUsYQlLWMISlrCEJSxhCUtYwhKWsIQlLGEJS1jCEpawhCUsYQlLWMISlrCEJSxhCUtYwhKWsIQlLGEJS1jCEpawhCUsYQlLWMISlrCEJSxhCUtYwhKWsIQlLGEJS1jCEpawhCUsYQlLWMJ6MGJxQ1glw9qesIQlLGEJS1jCQljCEpawhCUshCUsYQlLWMJCWMISlrCEJSyEJSxhCUtYwkJYwhKWsIQlLIQlLGEJS1jCQljCEpawhCUsYSEsYQlLWMISFsISlrCEJSxhISxhCUtYwhIWwhKWsIQlLGEhLGEJS1jCEhbCEpawhCUsYSEsYQlLWMISFsISlrCEJSxhISxhCUtYwhIWwhKWsIQlLGEhLGEJS1jCEhbCEpawhCUsYSEsYQmrgtZJaRoCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADecQHV1ZxC0wDtPAAAAABJRU5ErkJggg==" alt="Lanka Tiles" class="mark">
+    <div>
+      <h1>LANKATILES · Defect Analysis System</h1>
+      <p>Ranala Plant · Sorting / QA · Glazed Floor Tiles</p>
+    </div>
+  </div>
+  <div class="header-meta">
+    FO/QA/07<br><span id="clock"></span><br>
+    <span id="userEmail" style="opacity:0.85;"></span> ·
+    <a href="#" id="signOutLink" style="color:#fff; text-decoration:underline;">Sign out</a>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button class="tab-btn active" data-view="entry">Defect Entry</button>
+  <button class="tab-btn" data-view="analysis">Defect Analysis</button>
+  <button class="tab-btn" data-view="dashboard">Dashboard</button>
+  <button class="tab-btn" data-view="records">Records</button>
+  <button class="tab-btn" data-view="ai">AI Assistant</button>
+</nav>
+
+<main>
+
+  <!-- ============ ENTRY VIEW ============ -->
+  <section class="view active" id="view-entry">
+
+    <div class="card">
+      <h2><span class="n">1</span> Job Information</h2>
+      <div class="jobgrid">
+        <div class="field"><label>Date</label><input type="date" id="jDate"></div>
+        <div class="field" style="position:relative;">
+          <label>Type <span style="color:var(--terracotta);">*</span></label>
+          <input type="text" id="jType" autocomplete="off" placeholder="Start typing… e.g. FAY-DUNI" required>
+          <div id="typeSuggest" class="suggest-list"></div>
+        </div>
+        <div class="field">
+          <label>Glazing Line</label>
+          <select id="jGL">
+            <option>GL-01</option><option>GL-02</option><option>GL-05</option><option>GL-06</option>
+          </select>
+        </div>
+        <div class="field"><label>Lot (YY/MM)</label><input type="text" id="jLot" placeholder="26/07" pattern="\d{2}/\d{2}"></div>
+        <div class="field">
+          <label>Shift</label>
+          <select id="jShift"><option value="M">M — Morning</option><option value="E">E — Evening</option><option value="N">N — Night</option></select>
+        </div>
+        <div class="field">
+          <label>Texture <span style="font-weight:400;text-transform:none;">(auto)</span></label>
+          <input type="text" id="jTexture" readonly>
+        </div>
+        <div class="field">
+          <label>Size (mm) <span style="font-weight:400;text-transform:none;">(auto)</span></label>
+          <input type="text" id="jSize" readonly placeholder="Auto from Type">
+        </div>
+        <div class="field">
+          <label>Kiln <span style="font-weight:400;text-transform:none;">(auto)</span></label>
+          <input type="text" id="jKiln" readonly placeholder="Auto from GL">
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2><span class="n">2</span> Defect Log <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--ink-soft)">— search a defect to add it, then enter piece counts; % and impact calculate live</span></h2>
+      <div class="field" style="position:relative; max-width:420px; margin-bottom:14px;">
+        <label>Search Defect to Add</label>
+        <input type="text" id="defectSearch" autocomplete="off" placeholder="e.g. particle, corner, glaze…">
+        <div id="defectSearchSuggest" class="suggest-list"></div>
+      </div>
+      <div class="table-wrap">
+        <table class="defects">
+          <thead>
+            <tr class="grp">
+              <th rowspan="2">Def<br>No</th>
+              <th rowspan="2" style="text-align:left">Defect Description</th>
+              <th colspan="3" class="grp-2nd">2nd Grade</th>
+              <th colspan="3" class="grp-c">C Grade</th>
+              <th colspan="3" class="grp-dam">Damage</th>
+              <th rowspan="2">Total<br>Impact</th>
+              <th rowspan="2"></th>
+            </tr>
+            <tr class="grp">
+              <th class="grp-2nd">Qty (pcs)</th><th class="grp-2nd">%</th><th class="grp-2nd">In Prod %</th>
+              <th class="grp-c">Qty (pcs)</th><th class="grp-c">%</th><th class="grp-c">In Prod %</th>
+              <th class="grp-dam">Qty (pcs)</th><th class="grp-dam">%</th><th class="grp-dam">In Prod %</th>
+            </tr>
+          </thead>
+          <tbody id="defectBody">
+            <tr id="defectBodyEmptyRow"><td colspan="13" style="color:var(--ink-soft); text-align:center; padding:16px;">No defects added yet — search above and select one to start entering data.</td></tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="2">TOTAL</td>
+              <td id="fC"></td><td>100%</td><td id="fE"></td>
+              <td id="fF"></td><td>100%</td><td id="fH"></td>
+              <td id="fI"></td><td>100%</td><td id="fK"></td>
+              <td id="fL"></td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2><span class="n">3</span> Grade Summary (SQM)</h2>
+      <div class="sumgrid">
+        <div class="sumgroup g-1">
+          <h3 style="color:var(--good)">Sellable</h3>
+          <div class="sumrow"><label>1st Grade</label><input type="number" step="0.01" class="sqm" data-key="g1"><span class="pctbadge" id="pct-g1">0.0%</span></div>
+          <div class="sumrow"><label>2nd Grade</label><input type="number" step="0.01" class="sqm" data-key="g2"><span class="pctbadge" id="pct-g2">0.0%</span></div>
+          <div class="sumrow"><label>Diagonal (2nd)</label><input type="number" step="0.01" class="sqm" data-key="g2diag"><span class="pctbadge" id="pct-g2diag">0.0%</span></div>
+          <div class="sumrow"><label>Warpage / Centre Curv. (2nd)</label><input type="number" step="0.01" class="sqm" data-key="g2warp"><span class="pctbadge" id="pct-g2warp">0.0%</span></div>
+        </div>
+        <div class="sumgroup g-c">
+          <h3 style="color:var(--amber)">"C" Grade</h3>
+          <div class="sumrow"><label>C Grade</label><input type="number" step="0.01" class="sqm" data-key="cGrade"><span class="pctbadge" id="pct-cGrade">0.0%</span></div>
+          <div class="sumrow"><label>Size Out</label><input type="number" step="0.01" class="sqm" data-key="cSize"><span class="pctbadge" id="pct-cSize">0.0%</span></div>
+          <div class="sumrow"><label>Diagonal (C)</label><input type="number" step="0.01" class="sqm" data-key="cDiag"><span class="pctbadge" id="pct-cDiag">0.0%</span></div>
+          <div class="sumrow"><label>Warpage / Centre Curv. (C)</label><input type="number" step="0.01" class="sqm" data-key="cWarp"><span class="pctbadge" id="pct-cWarp">0.0%</span></div>
+        </div>
+        <div class="sumgroup g-d">
+          <h3 style="color:var(--terracotta)">Damages</h3>
+          <div class="sumrow"><label>Damages</label><input type="number" step="0.01" class="sqm" data-key="dam"><span class="pctbadge" id="pct-dam">0.0%</span></div>
+          <div class="sumrow"><label>Sorting Damages</label><input type="number" step="0.01" class="sqm" data-key="damSort"><span class="pctbadge" id="pct-damSort">0.0%</span></div>
+          <div class="sumrow"><label>Before Polishing & SQ.</label><input type="number" step="0.01" class="sqm" data-key="damPolish"><span class="pctbadge" id="pct-damPolish">0.0%</span></div>
+          <div class="sumrow"><label>Liner</label><input type="number" step="0.01" class="sqm" data-key="damLiner"><span class="pctbadge" id="pct-damLiner">0.0%</span></div>
+          <div class="sumrow"><label>Planner</label><input type="number" step="0.01" class="sqm" data-key="damPlanner"><span class="pctbadge" id="pct-damPlanner">0.0%</span></div>
+          <div class="sumrow"><label>Kiln Damages</label><input type="number" step="0.01" class="sqm" data-key="damKiln"><span class="pctbadge" id="pct-damKiln">0.0%</span></div>
+        </div>
+      </div>
+      <div class="sumtotal"><span>Grand Total SQM</span><span id="grandTotal">0.00</span></div>
+      <div class="kpis kpis-3" style="margin-top:14px; margin-bottom:0;">
+        <div class="kpi good"><div class="label">Saleable Yield %</div><div class="value" id="entrySellable">0.0%</div></div>
+        <div class="kpi c"><div class="label">C Grade %</div><div class="value" id="entryCGrade">0.0%</div></div>
+        <div class="kpi dam"><div class="label">Damage %</div><div class="value" id="entryDamage">0.0%</div></div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <span id="saveStatus"></span>
+      <button class="btn ghost" id="btnClear">Clear Form</button>
+      <button class="btn ghost" id="btnCSV">Export CSV</button>
+      <button class="btn primary" id="btnSave">Save Record</button>
+    </div>
+  </section>
+
+  <!-- ============ DASHBOARD VIEW ============ -->
+  <section class="view" id="view-dashboard">
+    <div class="card">
+      <h2><span class="n">6</span> Filters <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--ink-soft)">— narrow down saved records for cumulative analysis</span></h2>
+      <div class="jobgrid filter-grid">
+        <div class="field"><label>Date From</label><input type="date" id="fDateFrom"></div>
+        <div class="field"><label>Date To</label><input type="date" id="fDateTo"></div>
+        <div class="field" style="position:relative;"><label>Type</label><input type="text" id="fType" autocomplete="off" placeholder="Any — start typing"><div id="filterTypeSuggest" class="suggest-list"></div></div>
+        <div class="field"><label>Texture</label><select id="fTexture">
+          <option value="">All Textures</option>
+          <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>
+          <option>6</option><option>7</option><option>8</option><option>9</option>
+          <option>A</option><option>B</option><option>C</option><option>D</option><option>E</option>
+          <option>F</option><option>G</option><option>H</option><option>J</option><option>K</option><option>L</option>
+        </select></div>
+        <div class="field"><label>Size</label><select id="fSize">
+          <option value="">All Sizes</option>
+          <option value="300×300">300×300</option>
+          <option value="300×300P">300×300P</option>
+          <option value="400×400">400×400</option>
+          <option value="500×500">500×500</option>
+          <option value="600×300">600×300</option>
+          <option value="600×300P">600×300P</option>
+          <option value="600×600">600×600</option>
+          <option value="600×600P">600×600P</option>
+          <option value="600×1200">600×1200</option>
+          <option value="600×1200P">600×1200P</option>
+          <option value="800×800">800×800</option>
+          <option value="800×800P">800×800P</option>
+          <option value="800×1200">800×1200</option>
+          <option value="800×1200P">800×1200P</option>
+        </select></div>
+        <div class="field"><label>Glazing Line</label><select id="fGL">
+          <option value="">All Glazing Lines</option>
+          <option>GL-01</option><option>GL-02</option><option>GL-05</option><option>GL-06</option>
+        </select></div>
+        <div class="field"><label>Lot (YY/MM)</label><input type="text" id="fLot" placeholder="Any"></div>
+        <div class="field"><label>Shift</label><select id="fShift">
+          <option value="">All Shifts</option>
+          <option value="M">M — Morning</option><option value="E">E — Evening</option><option value="N">N — Night</option>
+        </select></div>
+        <div class="field"><label>Kiln</label><select id="fKiln">
+          <option value="">All Kilns</option>
+          <option>Kiln-03</option><option>Kiln-04</option><option>Kiln-05</option>
+        </select></div>
+      </div>
+      <div class="actions filter-actions" style="justify-content:flex-start; margin-top:12px;">
+        <span id="filterStatus" style="font-size:12px; color:var(--ink-soft); align-self:center;"></span>
+        <button class="btn ghost" id="btnResetFilters">Reset</button>
+        <button class="btn primary" id="btnApplyFilters">Apply Filters</button>
+      </div>
+    </div>
+
+    <div class="kpis">
+      <div class="kpi total"><div class="label">Grand Total SQM (filtered)</div><div class="value" id="kpiTotal">0.00</div></div>
+      <div class="kpi good"><div class="label">Sellable %</div><div class="value" id="kpiSellable">0.0%</div></div>
+      <div class="kpi c"><div class="label">C Grade %</div><div class="value" id="kpiC">0.0%</div></div>
+      <div class="kpi dam"><div class="label">Damage %</div><div class="value" id="kpiDam">0.0%</div></div>
+    </div>
+    <div class="card">
+      <h2><span class="n">7</span> Defect Pareto — C Grade % &amp; Damage % by Contributor</h2>
+      <div class="chart-box chart-box-tall"><canvas id="paretoChart"></canvas></div>
+    </div>
+    <div class="card">
+      <h2><span class="n">8</span> C Grade &amp; Damage Defect Analysis <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--ink-soft)">— each contributor's share of total C Grade / total Damage</span></h2>
+      <div class="chart-grid chart-grid-equal">
+        <div class="chart-box"><canvas id="cGradePieChart"></canvas></div>
+        <div class="chart-box"><canvas id="damagePieChart"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ANALYSIS VIEW ============ -->
+  <section class="view" id="view-analysis">
+    <div class="card">
+      <h2><span class="n">4</span> Filters <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--ink-soft)">— narrow down saved records for this analysis</span></h2>
+      <div class="jobgrid filter-grid">
+        <div class="field"><label>Date From</label><input type="date" id="aDateFrom"></div>
+        <div class="field"><label>Date To</label><input type="date" id="aDateTo"></div>
+        <div class="field" style="position:relative;"><label>Type</label><input type="text" id="aType" autocomplete="off" placeholder="Any — start typing"><div id="analysisTypeSuggest" class="suggest-list"></div></div>
+        <div class="field"><label>Texture</label><select id="aTexture">
+          <option value="">All Textures</option>
+          <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>
+          <option>6</option><option>7</option><option>8</option><option>9</option>
+          <option>A</option><option>B</option><option>C</option><option>D</option><option>E</option>
+          <option>F</option><option>G</option><option>H</option><option>J</option><option>K</option><option>L</option>
+        </select></div>
+        <div class="field"><label>Size</label><select id="aSize">
+          <option value="">All Sizes</option>
+          <option value="300×300">300×300</option>
+          <option value="300×300P">300×300P</option>
+          <option value="400×400">400×400</option>
+          <option value="500×500">500×500</option>
+          <option value="600×300">600×300</option>
+          <option value="600×300P">600×300P</option>
+          <option value="600×600">600×600</option>
+          <option value="600×600P">600×600P</option>
+          <option value="600×1200">600×1200</option>
+          <option value="600×1200P">600×1200P</option>
+          <option value="800×800">800×800</option>
+          <option value="800×800P">800×800P</option>
+          <option value="800×1200">800×1200</option>
+          <option value="800×1200P">800×1200P</option>
+        </select></div>
+        <div class="field"><label>Glazing Line</label><select id="aGL">
+          <option value="">All Glazing Lines</option>
+          <option>GL-01</option><option>GL-02</option><option>GL-05</option><option>GL-06</option>
+        </select></div>
+        <div class="field"><label>Lot (YY/MM)</label><input type="text" id="aLot" placeholder="Any"></div>
+        <div class="field"><label>Shift</label><select id="aShift">
+          <option value="">All Shifts</option>
+          <option value="M">M — Morning</option><option value="E">E — Evening</option><option value="N">N — Night</option>
+        </select></div>
+        <div class="field"><label>Kiln</label><select id="aKiln">
+          <option value="">All Kilns</option>
+          <option>Kiln-03</option><option>Kiln-04</option><option>Kiln-05</option>
+        </select></div>
+      </div>
+      <div class="actions filter-actions" style="justify-content:flex-start; margin-top:12px;">
+        <span id="analysisFilterStatus" style="font-size:12px; color:var(--ink-soft); align-self:center;"></span>
+        <button class="btn ghost" id="btnResetAnalysisFilters">Reset</button>
+        <button class="btn primary" id="btnApplyAnalysisFilters">Apply Filters</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2><span class="n">5</span> Defect Analysis Summary <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--ink-soft)">— filtered results, defects ranked by % contribution under each grade</span></h2>
+      <div class="analysis-grid">
+        <div class="summary-table-inner">
+          <table class="summary-table" id="analysisLeftTable">
+            <tbody id="analysisLeftBody">
+              <tr><td colspan="2" style="color:var(--ink-soft); text-align:center; padding:20px;">No matching data yet — connect API_URL and save some records.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="summary-table-inner">
+          <table class="summary-table" id="analysisRightTable">
+            <tbody id="analysisRightBody">
+              <tr><td colspan="2" style="color:var(--ink-soft); text-align:center; padding:20px;">No matching data yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn ghost" id="btnExportAnalysisCSV">Export CSV</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ RECORDS VIEW ============ -->
+  <section class="view" id="view-records">
+    <div class="card">
+      <h2><span class="n">9</span> Saved Records</h2>
+      <div class="actions" style="justify-content:flex-start; margin-bottom:10px;">
+        <button class="btn ghost" id="btnRefresh">Refresh from Sheet</button>
+      </div>
+      <div id="recordsWrap" style="overflow-x:auto;">
+        <table class="records">
+          <thead><tr><th>Date</th><th>Type</th><th>Texture</th><th>Size</th><th>GL</th><th>Kiln</th><th>Lot</th><th>Shift</th><th>Total SQM</th><th>Sellable %</th><th>C Grade %</th><th>Damage %</th><th></th></tr></thead>
+          <tbody id="recordsBody"><tr><td colspan="13" style="color:var(--ink-soft)">Connect API_URL below to load saved records.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ AI ASSISTANT VIEW ============ -->
+  <section class="view" id="view-ai">
+    <div class="card">
+      <h2><span class="n">10</span> Ask a Question <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--ink-soft)">— click a question below, no typing needed</span></h2>
+      <div class="ai-question-grid">
+        <button class="ai-question" data-q="yesterday">
+          <span class="ai-q-icon">📅</span>
+          <span>Investigate yesterday's quality issues</span>
+        </button>
+        <button class="ai-question" data-q="lastweek">
+          <span class="ai-q-icon">📆</span>
+          <span>Investigate last week's quality issues</span>
+        </button>
+        <button class="ai-question" data-q="last10">
+          <span class="ai-q-icon">🗓️</span>
+          <span>Investigate last 10 days' quality issues</span>
+        </button>
+        <button class="ai-question" data-q="recurring-damage">
+          <span class="ai-q-icon">📈</span>
+          <span>Which defect is becoming a recurring problem in Damages?</span>
+        </button>
+        <button class="ai-question" data-q="recurring-cgrade">
+          <span class="ai-q-icon">📈</span>
+          <span>Which defect is becoming a recurring problem in C Grade?</span>
+        </button>
+        <button class="ai-question" data-q="variation">
+          <span class="ai-q-icon">📉</span>
+          <span>Last 10 days — specific defect variation (line chart)</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="card" id="aiResultCard" style="display:none;">
+      <h2 id="aiResultTitle"><span class="n">•</span> Result</h2>
+      <div id="aiResultBody"></div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+/* =====================================================================
+   CONFIG — paste your Google Apps Script Web App URL here to enable
+   Save Record / Refresh from Sheet. Leave blank to use the tool
+   offline (entry, calculations, CSV export & charts still work).
+   Expected backend actions (see companion Code.gs): 'addRecord', 'getRecords'
+===================================================================== */
+const API_URL = "https://script.google.com/macros/s/AKfycbwpWmlExJ5bhcdT2FG05edXpUd3B-WwxSjaoX4Msk7RmQtvXForRh8jVF2zUwxUz3Z7IA/exec"; // e.g. "https://script.google.com/macros/s/XXXX/exec"
+
+/* =====================================================================
+   DATA — defect list & summary categories (mirrors the Excel sheet)
+===================================================================== */
+const DEFECTS = [
+"BROKEN CORNERS [B/G]","BROKEN CORNERS [A/G]","BROKEN EDGES [B/G]","BROKEN EDGES [A/G]",
+"CRACKED CORNERS","CRACKED EDGES","KILN PARTICLES","BODY HOLES","PIN HOLES",
+"BROKEN COR. & EDGES [A/F]","CROWLING","ROUGH EDGES","POWDER PARTICLES","DENTS",
+"SCRATCH MARKS","BROKEN COR / EDGES [SQ - MC]","PRINTING DAMAGE / LINES","INK DROPS",
+"WHITE EDGES","UNEVENESS SQUARING","GLAZE BUBBLE","WATER PATCHES","GLAZE SURFACE DAMAGE",
+"SURFACE CRACKS","IRON PARTICLES","FOREIGN PARTICLES [B/G]","FOREIGN PARTICLES [A/G]",
+"COLOUR VARIATION","BLACK CORE / VISIBLE SQUARE","BELL, WELA & VIBRATION LINES",
+"BLOW OUT (Blistering)","GLAZE PARTICLES & Drops","TEAR DEFECT/GLAZE EDGE DAMAGE",
+"OVER / LOW CHAMFERING","EDGE CHIP","ROLLER EFFECTS","UNEVENESS POLISH (Dull)",
+"UNEVENESS POLISH ON EDGES","OVER POLISH","WAX / COATING PROBLEM"
+];
+
+// Production type codes (format: F.. ... ends in a number)
+const TYPE_CODES = ["FAE-ANW---M0079B58","FAE-NRV---P0238A51","FAE-NRV---P0238B51","FAE-PDM---P0075A51","FAE-TTN---M0006D58","FAP-ATM---X0756C56","FAP-ENS---X0802D56","FAP-HMN---X0819C56","FAP-KTM---X0777C56","FAP-LAQ---X0828C56","FAP-LUR---X0859C56","FAP-MRG---X0817C56","FAP-PEV---X0951F56","FAP-RF----X0005-56","FAP-SEL---X0910F56","FAR-ABY---P0219A51","FAR-ALB---P0013F51","FAR-ALP---P0072A51","FAR-BSQ---P0010A51","FAR-CAV---X0112A56","FAR-CAV---X0112C56","FAR-GRV---P0004A51","FAR-HBN---M0007A56","FAR-INF---P0050A51","FAR-KZO---P0005A51","FAR-LAN---P0071A51","FAR-MET---M0050A56","FAR-PAS---P0098A51","FAR-PRI---P0217A51","FAR-RFC---P0222A51","FAR-RSQ---P0218A51","FAR-TTN---M0006A56","FAR-TTN---M0006Z56","FAR-TUL---M0001A56","FAR-WLN---M0008A56","FAR-WND---P0223A51","FAS-ALB---P0013A51","FAS-ARS---M0071A56","FAS-AUA---P0210A51","FAS-CHO---P0206A51","FAS-CLD---P0040A51","FAS-CLD---P0040B51","FAS-EHV---P0234A51","FAS-GRI---P0208A51","FAS-PEL---P0026B51","FAS-SHL---P0207A51","FAS-VNS---M0017A55","FAS-VNS---M0017B55","FAS-VNS---P0017B51","FAX-ARI----0512B52","FAX-ETR----0574D56","FAY-ACSD--X0224A56","FAY-ACSD--X0224B56","FAY-AFR---X0063A56","FAY-AGG---X0124A56","FAY-AME---X0170B52","FAY-ARC---G0067A52","FAY-ARC---G0067B52","FAY-ASP---M0082A56","FAY-ASP---M0082D56","FAY-AUR---X0175A52","FAY-BGA---X0101C52","FAY-BHS---X0191A52","FAY-BLD---G0201A52","FAY-BLS---X0007A52","FAY-BLS---X0007B52","FAY-BLS---X0007E52","FAY-BLS---X0007F52","FAY-CAM---P0025A51","FAY-CAM---P0025B51","FAY-CAO---G0117A52","FAY-CERA--X0104A52","FAY-CERA--X0700A52","FAY-CERA--X0701A52","FAY-CERA--X0702A52","FAY-CERA--X0702B52","FAY-CERA--X0703A56","FAY-CERA--X0704A56","FAY-CERA--X0708A52","FAY-CERA--X0709A52","FAY-CERA--X0710A52","FAY-CERA--X0711A52","FAY-CERA--X0712A52","FAY-CERA--X0713A56","FAY-CERA--X0714A56","FAY-CERA--X0715A56","FAY-CERA--X0716A56","FAY-CERA--X0718A52","FAY-CERA--X0720A52","FAY-CERA--X0781A56","FAY-CERA--X0782A52","FAY-CNR---M0010A56","FAY-COS---M0043C55","FAY-COS---M0043D55","FAY-CRO---P0056A51","FAY-DES---X0019B52","FAY-DOK---X0009A57","FAY-DOK---X0009C56","FAY-DUNI--X0002A52","FAY-DUNI--X0003B52","FAY-DUNI--X0003C52","FAY-DUNI--X0010A52","FAY-DUNI--X0014A56","FAY-DUNI--X0020A52","FAY-DUNI--X0022A56","FAY-DUNI--X0030A56","FAY-DUNI--X0032A56","FAY-DUNI--X0037A56","FAY-DUNI--X0037B56","FAY-DUNI--X0038A52","FAY-DUNI--X0044A52","FAY-DUNI--X0045A52","FAY-DUNI--X0046A52","FAY-DUNI--X0049A52","FAY-DUNI--X0049B52","FAY-DUNI--X0049C52","FAY-DUNI--X0157A52","FAY-DUNI--X0161A52","FAY-DUNI--X0162A52","FAY-DUNI--X0166A52","FAY-DUNI--X0167A52","FAY-DUNI--X0172A56","FAY-DUNI--X0173A56","FAY-DUNI--X0176A55","FAY-DUNI--X0177A55","FAY-DUNI--X0184A56","FAY-DUNI--X0187A56","FAY-DUNI--X0192A56","FAY-DUNI--X0206A56","FAY-DUNI--X0208A56","FAY-DUNI--X0210A52","FAY-DUNI--X0211A52","FAY-DUNI--X0216A52","FAY-ECO---M0122A56","FAY-ECT---X0132A52","FAY-FEL---P0049A51","FAY-FLR---G0115A52","FAY-FRE---P0048A51","FAY-FRV---X0174A52","FAY-GLZ---X0137A52","FAY-GLZ---X0137B52","FAY-GLZ---X0137C52","FAY-GNE---X0108A56","FAY-GOB---X0123A52","FAY-GRA---X0022C52","FAY-GRE---X0110A52","FAY-GTZ---X0131A52","FAY-HIL---X0057A52","FAY-KLD---X0001K56","FAY-KLD---X0010G52","FAY-KLD---X0010G56","FAY-KOZ---X0053A52","FAY-KUM---X0107A56","FAY-LMN---X0127A56","FAY-LMN---X0127B56","FAY-LMN---X0127F56","FAY-LMS---X0146A56","FAY-LSP---X0230A56","FAY-MAE---P0051A51","FAY-MDR---M0011A55","FAY-MDR---M0011B55","FAY-MDR---P0011E51","FAY-MFL---X0126A56","FAY-MIR---P0134A51","FAY-MOS---M0083A55","FAY-MOS---M0083A56","FAY-MOS---M0083A58","FAY-MOS---M0084C56","FAY-MOS---X0083A52","FAY-OEX---X0139A52","FAY-PASD--X0698B56","FAY-PAS---P0698A51","FAY-PRS---G0125A52","FAY-QRT---M0098C56","FAY-RDN---X0138A56","FAY-RMA---X0109A52","FAY-RSQ---X0189A52","FAY-RVE---X0104A52","FAY-SAG---X0085D56","FAY-SDT---X0214A52","FAY-SER---X0147B56","FAY-SHD---X0169A52","FAY-SHD---X0169B52","FAY-SLN---X0215A52","FAY-SLO---X0140A56","FAY-SMER--G0001A52","FAY-SND---P0030B51","FAY-SNY---X0144C56","FAY-SR----X0104-52","FAY-SR----X0104-55","FAY-STT---X0190A52","FAY-SYK---G0005A52","FAY-SYK---G0005B52","FAY-TEK---M0090A56","FAY-TIN---X0213A52","FAY-TRQ---X0212A52","FAY-TRZ---P0087A51","FAY-URB---X0001E56","FAY-URB---X0001F56","FAY-VLRD--X0225A56","FAY-VLRD--X0225D56","FAY-VLS---P0206A51","FAY-VUT---X0165A56","FAY-WNX---G0119A52","FAY-ZIR---P0135A51","FAY-ZIR---X0135A52","KAFHSQLO---0002A56","KAFHSQLOBS-0108B52","KAFHSQLOKA-0109C52","KAFHSQLOOE-0107A52","KAFHSQLOWA-0106B52","FAE-AGA---P0034A51","FAE-OLM---P0076B51","FAE-TRL---P0236A51","FAP-BRC---X0744A56","FAP-DOK---X0596Q56","FAP-RF----X0008-56","FAR-WLN---P0008D51","FAS-POR---M0092A55","FAS-SNG---P0205A51","FAS-VEM---P0039A51","FAS-VNS---M0017C55","FAX-SAT----0577B52","FAX-SNF----0542A55","FAY-AME---X0170A52","FAY-BGA---X0101B52","FAY-BIS---X0141A52","FAY-CBDT--S0200A56","FAY-GRA---X0022A52","FAY-NMT---X0100B52","FAY-RDN---X0138C57","FAY-RNS---M0011A55","FAY-RVE---X0104A56","FAY-SND---P0030A51","FAY-TVR---X0118A56","FAY-URBD--X0001F56","FAY-VDE---X0145A52","FAY-VUT---X0165C56","FAY-ZIR---P0135B51","KAFHSQLOKA-0109B52","FAY-CEM---X0098A56","FAY-CEM---X0098A57","FAY-CERA--X0728B56","FAY-CERA--X0726A56","FAY-CERA--X0722A52","FAY-COOL---0800A56","FAS-SNG---P0205A56"];
+
+/* =====================================================================
+   STATE
+===================================================================== */
+if(typeof ChartDataLabels !== 'undefined'){
+  Chart.register(ChartDataLabels);
+  Chart.defaults.set('plugins.datalabels', { display:false });
+}
+
+let sqmPerPc = 0.16; // 400x400mm default
+const rows = DEFECTS.map(()=>({ c:0, f:0, i:0 })); // pcs entered per defect (2nd, C, Damage)
+const summary = { g1:0,g2:0,g2diag:0,g2warp:0, cGrade:0,cSize:0,cDiag:0,cWarp:0, dam:0,damSort:0,damPolish:0,damLiner:0,damPlanner:0,damKiln:0 };
+
+let paretoChart, cGradePieChart, damagePieChart;
+
+/* =====================================================================
+   INIT
+===================================================================== */
+function init(){
+  const now = new Date();
+  document.getElementById('jDate').value = now.toISOString().slice(0,10);
+  const yy = String(now.getFullYear()).slice(-2);
+  const mm = String(now.getMonth()+1).padStart(2,'0');
+  document.getElementById('jLot').value = `${yy}/${mm}`;
+  buildDefectRows();
+  wireEvents();
+  recalcAll();
+  tickClock();
+  setInterval(tickClock, 1000*30);
+}
+
+function tickClock(){
+  document.getElementById('clock').textContent = new Date().toLocaleString('en-GB',{ day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'});
+}
+
+let activeDefects = []; // indices (into DEFECTS) of defects currently added to the log, in the order added
+
+function buildDefectRows(){
+  const body = document.getElementById('defectBody');
+  if(!activeDefects.length){
+    body.innerHTML = '<tr id="defectBodyEmptyRow"><td colspan="13" style="color:var(--ink-soft); text-align:center; padding:16px;">No defects added yet — search above and select one to start entering data.</td></tr>';
+    return;
+  }
+  body.innerHTML = activeDefects.map(idx=>{
+    const name = DEFECTS[idx];
+    const r = rows[idx];
+    return `
+    <tr data-idx="${idx}">
+      <td class="num">${idx+1}</td>
+      <td class="desc">${name}</td>
+      <td><input type="number" min="0" step="1" class="qty${r.c>0?' filled':''}" data-col="c" data-idx="${idx}" value="${r.c}"></td>
+      <td class="num" id="d-${idx}">0.0%</td>
+      <td class="num" id="e-${idx}">0.00%</td>
+      <td><input type="number" min="0" step="1" class="qty${r.f>0?' filled':''}" data-col="f" data-idx="${idx}" value="${r.f}"></td>
+      <td class="num" id="g-${idx}">0.0%</td>
+      <td class="num" id="h-${idx}">0.00%</td>
+      <td><input type="number" min="0" step="1" class="qty${r.i>0?' filled':''}" data-col="i" data-idx="${idx}" value="${r.i}"></td>
+      <td class="num" id="j-${idx}">0.0%</td>
+      <td class="num" id="k-${idx}">0.00%</td>
+      <td class="impact-total">
+        <div class="bar-cell">
+          <span id="l-${idx}">0.00%</span>
+          <span class="bar-track"><span class="bar-fill" id="bar-${idx}" style="width:0%"></span></span>
+        </div>
+      </td>
+      <td><button type="button" class="remove-defect-btn" data-idx="${idx}" title="Remove this defect from the log">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function addDefectToLog(idx){
+  if(!activeDefects.includes(idx)) activeDefects.push(idx);
+  buildDefectRows();
+  recalcAll();
+  // Focus the first (2nd Grade) qty input of the newly added/selected row
+  const input = document.querySelector(`input.qty[data-col="c"][data-idx="${idx}"]`);
+  if(input){ input.focus(); input.select(); }
+}
+
+function removeDefectFromLog(idx){
+  activeDefects = activeDefects.filter(i=>i!==idx);
+  rows[idx].c = 0; rows[idx].f = 0; rows[idx].i = 0;
+  buildDefectRows();
+  recalcAll();
+}
+
+function wireEvents(){
+  document.querySelectorAll('.tab-btn').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      document.querySelectorAll('.tab-btn').forEach(x=>x.classList.remove('active'));
+      document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+      b.classList.add('active');
+      document.getElementById('view-'+b.dataset.view).classList.add('active');
+      if(b.dataset.view==='dashboard') initDashboard();
+      if(b.dataset.view==='analysis') initAnalysis();
+      if(b.dataset.view==='records') fetchAllRecords().then(renderRecordsTable);
+      if(b.dataset.view==='ai') fetchAllRecords();
+    });
+  });
+
+  wireTypeAutocomplete();
+
+  document.getElementById('jGL').addEventListener('change', updateKiln);
+  updateKiln();
+
+  document.getElementById('defectBody').addEventListener('input', e=>{
+    if(!e.target.classList.contains('qty')) return;
+    const idx = +e.target.dataset.idx, col = e.target.dataset.col;
+    rows[idx][col] = Math.max(0, +e.target.value || 0);
+    e.target.classList.toggle('filled', rows[idx][col] > 0);
+    document.getElementById('btnSave').disabled = false;
+    recalcAll();
+  });
+
+  document.getElementById('defectBody').addEventListener('click', e=>{
+    const btn = e.target.closest('.remove-defect-btn');
+    if(!btn) return;
+    const idx = +btn.dataset.idx;
+    const hasData = rows[idx].c>0 || rows[idx].f>0 || rows[idx].i>0;
+    if(hasData && !confirm(`Remove "${DEFECTS[idx]}" from the log? Its entered quantities will be cleared.`)) return;
+    removeDefectFromLog(idx);
+    document.getElementById('btnSave').disabled = false;
+  });
+
+  wireDefectSearch();
+
+  document.querySelectorAll('.sqm').forEach(inp=>{
+    inp.addEventListener('input', ()=>{
+      summary[inp.dataset.key] = +inp.value || 0;
+      document.getElementById('btnSave').disabled = false;
+      recalcAll();
+    });
+  });
+
+  document.getElementById('btnClear').addEventListener('click', clearForm);
+  document.getElementById('btnCSV').addEventListener('click', exportCSV);
+  document.getElementById('btnSave').addEventListener('click', saveRecord);
+  document.getElementById('btnRefresh').addEventListener('click', loadRecords);
+  document.getElementById('btnApplyFilters').addEventListener('click', applyFilters);
+  ['fDateFrom','fDateTo','fTexture','fSize','fShift','fKiln'].forEach(id=>{
+    document.getElementById(id).addEventListener('change', applyFilters);
+  });
+  document.getElementById('fGL').addEventListener('change', ()=>{
+    autoFillKilnFromGL('f');
+    applyFilters();
+  });
+  document.getElementById('fLot').addEventListener('input', applyFilters);
+  document.getElementById('btnResetFilters').addEventListener('click', ()=>{
+    ['fDateFrom','fDateTo','fType','fLot'].forEach(id=>document.getElementById(id).value='');
+    ['fTexture','fSize','fGL','fShift','fKiln'].forEach(id=>document.getElementById(id).value='');
+    applyFilters();
+  });
+
+  document.getElementById('btnApplyAnalysisFilters').addEventListener('click', applyAnalysisFilters);
+  ['aDateFrom','aDateTo','aTexture','aSize','aShift','aKiln'].forEach(id=>{
+    document.getElementById(id).addEventListener('change', applyAnalysisFilters);
+  });
+  document.getElementById('aGL').addEventListener('change', ()=>{
+    autoFillKilnFromGL('a');
+    applyAnalysisFilters();
+  });
+  document.getElementById('aLot').addEventListener('input', applyAnalysisFilters);
+  document.getElementById('btnResetAnalysisFilters').addEventListener('click', ()=>{
+    ['aDateFrom','aDateTo','aType','aLot'].forEach(id=>document.getElementById(id).value='');
+    ['aTexture','aSize','aGL','aShift','aKiln'].forEach(id=>document.getElementById(id).value='');
+    applyAnalysisFilters();
+  });
+  document.getElementById('btnExportAnalysisCSV').addEventListener('click', exportAnalysisCSV);
+
+  document.querySelectorAll('.ai-question').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      document.querySelectorAll('.ai-question').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      await runAIQuestion(btn.dataset.q);
+    });
+  });
+}
+
+function wireDefectSearch(){
+  const input = document.getElementById('defectSearch');
+  const list = document.getElementById('defectSearchSuggest');
+  let hiIdx = -1, matches = [];
+
+  function render(){
+    if(!matches.length){ list.classList.remove('show'); list.innerHTML=''; return; }
+    list.innerHTML = matches.map((m,i)=>`<div class="suggest-item${i===hiIdx?' hi':''}" data-idx="${m.idx}">${m.name}</div>`).join('');
+    list.classList.add('show');
+  }
+  function update(){
+    const q = input.value.trim().toUpperCase();
+    hiIdx = -1;
+    matches = q
+      ? DEFECTS.map((name,idx)=>({name,idx})).filter(x=>x.name.toUpperCase().includes(q)).slice(0,6)
+      : [];
+    render();
+  }
+  function select(idx){
+    addDefectToLog(idx);
+    input.value = '';
+    matches = [];
+    render();
+  }
+
+  input.addEventListener('input', update);
+  input.addEventListener('focus', update);
+  input.addEventListener('keydown', e=>{
+    if(!matches.length) return;
+    if(e.key==='ArrowDown'){ e.preventDefault(); hiIdx = Math.min(hiIdx+1, matches.length-1); render(); }
+    else if(e.key==='ArrowUp'){ e.preventDefault(); hiIdx = Math.max(hiIdx-1, 0); render(); }
+    else if(e.key==='Enter' && hiIdx>=0){ e.preventDefault(); select(matches[hiIdx].idx); }
+    else if(e.key==='Escape'){ matches=[]; render(); }
+  });
+  list.addEventListener('mousedown', e=>{
+    const item = e.target.closest('.suggest-item');
+    if(!item) return;
+    select(+item.dataset.idx);
+  });
+  document.addEventListener('click', e=>{
+    if(e.target!==input && !list.contains(e.target)){ matches=[]; render(); }
+  });
+}
+
+function setupTypeAutocomplete(inputId, listId, onChange){
+  const input = document.getElementById(inputId);
+  const list = document.getElementById(listId);
+  let hiIdx = -1, matches = [];
+
+  function render(){
+    if(!matches.length){ list.classList.remove('show'); list.innerHTML=''; return; }
+    list.innerHTML = matches.map((m,i)=>`<div class="suggest-item${i===hiIdx?' hi':''}" data-i="${i}">${m}</div>`).join('');
+    list.classList.add('show');
+  }
+  function update(){
+    const q = input.value.trim().toUpperCase();
+    hiIdx = -1;
+    matches = q ? TYPE_CODES.filter(t=>t.toUpperCase().includes(q)).slice(0,4) : [];
+    render();
+    onChange();
+  }
+
+  input.addEventListener('input', update);
+  input.addEventListener('focus', update);
+  input.addEventListener('keydown', e=>{
+    if(!matches.length) return;
+    if(e.key==='ArrowDown'){ e.preventDefault(); hiIdx = Math.min(hiIdx+1, matches.length-1); render(); }
+    else if(e.key==='ArrowUp'){ e.preventDefault(); hiIdx = Math.max(hiIdx-1, 0); render(); }
+    else if(e.key==='Enter' && hiIdx>=0){ e.preventDefault(); input.value = matches[hiIdx]; matches=[]; render(); onChange(); }
+    else if(e.key==='Escape'){ matches=[]; render(); }
+  });
+  list.addEventListener('mousedown', e=>{
+    const item = e.target.closest('.suggest-item');
+    if(!item) return;
+    input.value = matches[+item.dataset.i];
+    matches=[]; render();
+    onChange();
+  });
+  document.addEventListener('click', e=>{
+    if(e.target!==input && !list.contains(e.target)){ matches=[]; render(); }
+  });
+}
+
+function wireTypeAutocomplete(){
+  setupTypeAutocomplete('jType', 'typeSuggest', updateDerivedFields);
+  setupTypeAutocomplete('fType', 'filterTypeSuggest', ()=>{ autoFillTextureSizeFromType('f'); applyFilters(); });
+  setupTypeAutocomplete('aType', 'analysisTypeSuggest', ()=>{ autoFillTextureSizeFromType('a'); applyAnalysisFilters(); });
+}
+
+/* DERIVED LOGIC — Size and Texture are read from the Type code, not user-entered */
+function deriveSize(t){
+  if(!t) return '';
+  const u = t.toUpperCase();
+  const p = (t.endsWith('1') || t.endsWith('P')) ? 'P' : '';
+  if(u.startsWith('FAR')) return '600×1200'+p;
+  if(u.startsWith('FAE')) return '800×1200'+p;
+  if(u.startsWith('FAS')) return '800×800'+p;
+  if(u.startsWith('FAA')) return '300×300'+p;
+  if(u.startsWith('FAP')) return '600×300'+p;
+  if(u.startsWith('FAX')) return '500×500';
+  if(u.startsWith('FAY')) return '600×600'+p;
+  if(u.startsWith('FAT')) return '400×400';
+  return '—';
+}
+
+function deriveKiln(gl){
+  if(gl==='GL-01' || gl==='GL-02') return 'Kiln-04';
+  if(gl==='GL-05') return 'Kiln-03';
+  if(gl==='GL-06') return 'Kiln-05';
+  return '—';
+}
+
+function updateKiln(){
+  document.getElementById('jKiln').value = deriveKiln(document.getElementById('jGL').value);
+}
+
+function deriveTexture(t){
+  if(!t) return '';
+  const last = t.trim().slice(-1).toUpperCase();
+  // Texture is simply the LAST character of the Type code — either a
+  // digit 1-9 or a letter A-L (no I). e.g. "...A5J" -> J, "...A56" -> 6.
+  const valid = '123456789ABCDEFGHJKL';
+  return valid.includes(last) ? last : '—';
+}
+
+/* =====================================================================
+   FILTER AUTO-FILL (Sections 4 & 6 only) — unlike Section 1's locked
+   read-only fields, these just pre-fill a sensible default into an
+   editable dropdown; the user can freely change them afterward.
+===================================================================== */
+function setSelectIfOption(selectId, value){
+  const el = document.getElementById(selectId);
+  if(!el || !value || value==='—') return;
+  const hasOption = Array.from(el.options).some(o=>o.value===value);
+  if(hasOption) el.value = value;
+}
+
+function autoFillTextureSizeFromType(prefix){
+  const t = document.getElementById(prefix+'Type').value.trim();
+  if(!t) return;
+  setSelectIfOption(prefix+'Size', deriveSize(t));
+  setSelectIfOption(prefix+'Texture', deriveTexture(t));
+}
+
+function autoFillKilnFromGL(prefix){
+  const gl = document.getElementById(prefix+'GL').value;
+  setSelectIfOption(prefix+'Kiln', deriveKiln(gl));
+}
+
+function updateDerivedFields(){
+  const typeInput = document.getElementById('jType');
+  const t = typeInput.value.trim();
+  if(t) typeInput.style.borderColor = '';
+  const size = deriveSize(t);
+  document.getElementById('jSize').value = size;
+  document.getElementById('jTexture').value = deriveTexture(t);
+  sqmPerPc = sizeToSqm(size);
+  recalcAll();
+}
+
+function sizeToSqm(str){
+  if(!str) return 0.16;
+  const clean = str.replace(/[×xX]/,'x').replace(/[A-Za-z—]/g,'').trim();
+  const m = /^(\d+(\.\d+)?)\s*x\s*(\d+(\.\d+)?)$/i.exec(clean);
+  if(!m) return 0.16;
+  return (parseFloat(m[1])/1000) * (parseFloat(m[3])/1000);
+}
+
+/* =====================================================================
+   CALCULATIONS — mirrors the Excel formula logic exactly:
+   D = C / SUM(C)              (defect's % share within its grade)
+   E = D * (2nd-grade SQM group) / GrandTotalSQM   (production impact %)
+   G,H / J,K follow the same pattern for C Grade / Damage
+   L = E + H + K                (total combined impact %)
+===================================================================== */
+function recalcAll(){
+  const cVals = rows.map(r=>r.c*sqmPerPc);
+  const fVals = rows.map(r=>r.f*sqmPerPc);
+  const iVals = rows.map(r=>r.i*sqmPerPc);
+  const sumC = cVals.reduce((a,b)=>a+b,0);
+  const sumF = fVals.reduce((a,b)=>a+b,0);
+  const sumI = iVals.reduce((a,b)=>a+b,0);
+
+  const s = summary;
+  const grand = s.g1+s.g2+s.g2diag+s.g2warp + s.cGrade+s.cSize+s.cDiag+s.cWarp + s.dam+s.damSort+s.damPolish+s.damLiner+s.damPlanner+s.damKiln;
+  const secondGroup = s.g2 + s.g2diag + s.g2warp; // C56+C57+C58
+  const cGroup = s.cGrade;                        // C59
+  const damGroup = s.dam;                         // C64
+
+  const safeDiv = (a,b)=> b ? a/b : 0;
+
+  let sumL = 0;
+  const impacts = [];
+  DEFECTS.forEach((name, idx)=>{
+    const d = safeDiv(cVals[idx], sumC);
+    const e = safeDiv(d*secondGroup, grand);
+    const g = safeDiv(fVals[idx], sumF);
+    const h = safeDiv(g*cGroup, grand);
+    const j = safeDiv(iVals[idx], sumI);
+    const k = safeDiv(j*damGroup, grand);
+    const l = e+h+k;
+    sumL += l;
+    impacts.push({name, l});
+
+    // Only defects currently added to the visible log have DOM cells to update.
+    if(!activeDefects.includes(idx)) return;
+    document.getElementById(`d-${idx}`).textContent = pct(d);
+    document.getElementById(`e-${idx}`).textContent = pct(e,2);
+    document.getElementById(`g-${idx}`).textContent = pct(g);
+    document.getElementById(`h-${idx}`).textContent = pct(h,2);
+    document.getElementById(`j-${idx}`).textContent = pct(j);
+    document.getElementById(`k-${idx}`).textContent = pct(k,2);
+    document.getElementById(`l-${idx}`).textContent = pct(l,2);
+  });
+
+  const maxL = Math.max(0.0001, ...impacts.map(x=>x.l));
+  impacts.forEach((x,idx)=>{
+    if(!activeDefects.includes(idx)) return;
+    document.getElementById(`bar-${idx}`).style.width = (x.l/maxL*100).toFixed(1)+'%';
+  });
+
+  const sellablePct = safeDiv(s.g1+s.g2+s.g2diag+s.g2warp, grand);
+  const cPct = safeDiv(s.cGrade+s.cSize+s.cDiag+s.cWarp, grand);
+  const damPct = safeDiv(s.dam+s.damSort+s.damPolish+s.damLiner+s.damPlanner+s.damKiln, grand);
+  const cLineOnlyPct = safeDiv(cGroup, grand);   // just the "C Grade" line in Section 3, not Size Out/Diagonal/Warpage
+  const damLineOnlyPct = safeDiv(damGroup, grand); // just the "Damages" line in Section 3, not its sub-categories
+
+  document.getElementById('fC').textContent = sumC.toFixed(2);
+  document.getElementById('fF').textContent = sumF.toFixed(2);
+  document.getElementById('fI').textContent = sumI.toFixed(2);
+  // TOTAL row: 2nd Grade matches Total Saleable Yield (1st Grade tiles have
+  // no defect rows of their own, so this is the only way to reflect them).
+  // C Grade / Damage match their own single line item in Section 3 only —
+  // NOT the combined stage total that includes Size Out/Diagonal/Warpage
+  // or the damage sub-categories.
+  document.getElementById('fE').textContent = pct(sellablePct,2);
+  document.getElementById('fH').textContent = pct(cLineOnlyPct,2);
+  document.getElementById('fK').textContent = pct(damLineOnlyPct,2);
+  document.getElementById('fL').textContent = pct(sellablePct+cLineOnlyPct+damLineOnlyPct,2);
+
+  document.getElementById('grandTotal').textContent = grand.toFixed(2);
+  document.getElementById('entrySellable').textContent = pct(sellablePct);
+  document.getElementById('entryCGrade').textContent = pct(cPct);
+  document.getElementById('entryDamage').textContent = pct(damPct);
+
+  Object.keys(summary).forEach(key=>{
+    const badge = document.getElementById(`pct-${key}`);
+    if(badge) badge.textContent = pct(safeDiv(summary[key], grand));
+  });
+
+  window._latest = { impacts, sellablePct, cPct, damPct, grand, sumC, sumF, sumI };
+}
+
+function pct(v, dp=1){ return (v*100).toFixed(dp)+'%'; }
+
+/* =====================================================================
+   CHARTS
+===================================================================== */
+function renderCharts(data){
+  const src = data || window._latestAgg;
+  const { paretoItems } = src || {};
+  if(!paretoItems || !paretoItems.length || !paretoItems.some(x=>x.cPct>0 || x.damPct>0)){
+    [paretoChart, cGradePieChart, damagePieChart].forEach(c=>c && c.destroy());
+    paretoChart = cGradePieChart = damagePieChart = null;
+    return;
+  }
+
+  const top = [...paretoItems].sort((a,b)=>(b.cPct+b.damPct)-(a.cPct+a.damPct)).slice(0,15);
+
+  const ctx1 = document.getElementById('paretoChart');
+  if(paretoChart) paretoChart.destroy();
+  paretoChart = new Chart(ctx1, {
+    type:'bar',
+    data:{ labels: top.map(x=>x.name), datasets:[
+      { label:'C Grade %', data: top.map(x=>+(x.cPct*100).toFixed(2)), backgroundColor:'#FFAC14', borderRadius:3 },
+      { label:'Damage %', data: top.map(x=>+(x.damPct*100).toFixed(2)), backgroundColor:'#FF2414', borderRadius:3 }
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{ position:'bottom' },
+        datalabels:{
+          display: ctx => ctx.dataset.data[ctx.dataIndex] > 0,
+          color:'#fff',
+          font:{ size:9, weight:'700' },
+          anchor:'center',
+          align:'center',
+          formatter: value => value+'%'
+        }
+      },
+      scales:{
+        x:{ stacked:true, ticks:{ autoSkip:false, maxRotation:60, minRotation:40, font:{size:10} } },
+        y:{ stacked:true, ticks:{ callback:v=>v+'%' } }
+      } }
+  });
+
+  // Build pie slices for a given share-key, keeping the top 11 contributors
+  // and grouping the remainder into a single "Other" slice for readability.
+  function buildPieSlices(shareKey){
+    const items = paretoItems.filter(x=>x[shareKey] > 0).sort((a,b)=>b[shareKey]-a[shareKey]);
+    const top = items.slice(0,11);
+    const rest = items.slice(11).reduce((a,x)=>a+x[shareKey],0);
+    const labels = top.map(x=>x.name);
+    const values = top.map(x=>+(x[shareKey]*100).toFixed(2));
+    if(rest > 0){ labels.push('Other'); values.push(+(rest*100).toFixed(2)); }
+    return { labels, values };
+  }
+
+  // Tint palettes derived from the Pareto chart's C Grade (#FFAC14) and
+  // Damage (#FF2414) colors — the top slice uses the full color, and each
+  // subsequent slice is a progressively lighter tint (never darker).
+  const palette = ['#c1841f','#b1452a','#35618a','#2f7d52','#8a5fb0','#3a9aa0','#d17a3f','#7a8c3a','#c15b8f','#5a6b8c','#a06a3a','#4a9d78'];
+
+  const cData = buildPieSlices('cShare');
+  const ctx2 = document.getElementById('cGradePieChart');
+  if(cGradePieChart) cGradePieChart.destroy();
+  cGradePieChart = new Chart(ctx2, {
+    type:'pie',
+    data:{ labels: cData.labels, datasets:[{ data: cData.values, backgroundColor: palette }]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ title:{ display:true, text:'C Grade Defect Analysis', font:{size:13} }, legend:{ position:'bottom', labels:{ font:{size:10}, boxWidth:12 } },
+        tooltip:{ callbacks:{ label: ctx => `${ctx.label}: ${ctx.parsed}%` } } } }
+  });
+
+  const damData = buildPieSlices('damShare');
+  const ctx3 = document.getElementById('damagePieChart');
+  if(damagePieChart) damagePieChart.destroy();
+  damagePieChart = new Chart(ctx3, {
+    type:'pie',
+    data:{ labels: damData.labels, datasets:[{ data: damData.values, backgroundColor: palette }]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ title:{ display:true, text:'Damage Defect Analysis', font:{size:13} }, legend:{ position:'bottom', labels:{ font:{size:10}, boxWidth:12 } },
+        tooltip:{ callbacks:{ label: ctx => `${ctx.label}: ${ctx.parsed}%` } } } }
+  });
+}
+
+/* =====================================================================
+   ACTIONS: clear / export / save / load
+===================================================================== */
+function clearForm(){
+  if(!confirm('Clear all entered quantities and SQM values?')) return;
+  rows.forEach(r=>{ r.c=0; r.f=0; r.i=0; });
+  activeDefects = [];
+  buildDefectRows();
+  Object.keys(summary).forEach(k=>{ summary[k]=0; const b=document.getElementById(`pct-${k}`); if(b) b.textContent='0.0%'; });
+  document.querySelectorAll('.sqm').forEach(i=>i.value='');
+  document.getElementById('btnSave').disabled = false;
+  recalcAll();
+}
+
+function generateRecordId(){
+  return Date.now().toString(36) + Math.random().toString(36).slice(2,8);
+}
+
+function gatherRecord(){
+  const { sellablePct, cPct, damPct, grand } = window._latest;
+  return {
+    id: generateRecordId(),
+    date: document.getElementById('jDate').value,
+    type: document.getElementById('jType').value,
+    texture: document.getElementById('jTexture').value,
+    size: document.getElementById('jSize').value,
+    gl: document.getElementById('jGL').value,
+    kiln: document.getElementById('jKiln').value,
+    lot: document.getElementById('jLot').value,
+    shift: document.getElementById('jShift').value,
+    grandTotalSqm: +grand.toFixed(3),
+    sellablePct: +(sellablePct*100).toFixed(2),
+    cGradePct: +(cPct*100).toFixed(2),
+    damagePct: +(damPct*100).toFixed(2),
+    summary: { ...summary },
+    defects: DEFECTS.map((name, idx)=>({
+      name,
+      qty2nd: rows[idx].c, qtyC: rows[idx].f, qtyDam: rows[idx].i,
+      sqm2nd: +(rows[idx].c*sqmPerPc).toFixed(4),
+      sqmC: +(rows[idx].f*sqmPerPc).toFixed(4),
+      sqmDam: +(rows[idx].i*sqmPerPc).toFixed(4)
+    }))
+  };
+}
+
+function exportCSV(){
+  const rec = gatherRecord();
+  let csvRows = [
+    ['Date','Type','Texture','Size','GL','Kiln','Lot','Shift','Grand Total SQM','Sellable %','C Grade %','Damage %'],
+    [rec.date, rec.type, rec.texture, rec.size, rec.gl, rec.kiln, rec.lot, rec.shift, rec.grandTotalSqm, rec.sellablePct, rec.cGradePct, rec.damagePct],
+    [],
+    ['Defect No','Description','2nd Grade Qty (pcs)','C Grade Qty (pcs)','Damage Qty (pcs)']
+  ];
+  rec.defects.forEach((d,i)=> csvRows.push([i+1, d.name, d.qty2nd, d.qtyC, d.qtyDam]));
+  const csv = csvRows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `defect-analysis-${rec.date}-${rec.gl||'GL'}.csv`;
+  a.click();
+}
+
+async function saveRecord(){
+  const status = document.getElementById('saveStatus');
+  const btn = document.getElementById('btnSave');
+  const typeInput = document.getElementById('jType');
+
+  if(!typeInput.value.trim()){
+    status.textContent = 'Type is required — please select or enter a Type before saving.';
+    typeInput.focus();
+    typeInput.style.borderColor = 'var(--terracotta)';
+    return;
+  }
+  typeInput.style.borderColor = '';
+
+  if(!API_URL){
+    status.textContent = 'API_URL not set — record not sent to sheet (CSV export still works).';
+    return;
+  }
+  btn.disabled = true;
+  status.textContent = 'Saving…';
+  const rec = gatherRecord();
+  try{
+    const res = await fetch(API_URL, {
+      method:'POST',
+      headers:{ 'Content-Type':'text/plain' },
+      body: JSON.stringify({ action:'addRecord', record: rec })
+    });
+    const data = await res.json();
+    if(data.success){
+      status.textContent = 'Saved to sheet ✓ — button will re-enable once you change the Defect Log or Grade Summary.';
+      // Reflect the new record immediately everywhere, without waiting for "Refresh from Sheet"
+      if(window._allRecords) window._allRecords.unshift(rec);
+      else window._allRecords = [rec];
+      renderRecordsTable(window._allRecords);
+      applyFilters();
+      applyAnalysisFilters();
+      // btn stays disabled until the Defect Log or Grade Summary changes (see wireEvents)
+    } else {
+      status.textContent = 'Save failed: '+(data.error||'unknown error');
+      btn.disabled = false;
+    }
+  }catch(err){
+    status.textContent = 'Save failed: '+err.message;
+    btn.disabled = false;
+  }
+}
+
+function renderRecordsTable(list){
+  const body = document.getElementById('recordsBody');
+  if(!API_URL){
+    body.innerHTML = '<tr><td colspan="13" style="color:var(--ink-soft)">Set API_URL in the script to load saved records from Google Sheets.</td></tr>';
+    return;
+  }
+  if(!list || !list.length){ body.innerHTML = '<tr><td colspan="13" style="color:var(--ink-soft)">No records yet.</td></tr>'; return; }
+  body.innerHTML = list.map((r,idx)=>`
+    <tr><td>${r.date||''}</td><td>${r.type||''}</td><td>${r.texture||''}</td><td>${r.size||''}</td><td>${r.gl||''}</td><td>${r.kiln||''}</td><td>${r.lot||''}</td><td>${r.shift||''}</td>
+    <td>${r.grandTotalSqm ?? ''}</td><td>${r.sellablePct ?? ''}%</td><td>${r.cGradePct ?? ''}%</td><td>${r.damagePct ?? ''}%</td>
+    <td><button class="btn ghost" style="padding:5px 10px; font-size:11.5px; color:var(--terracotta); border-color:var(--terracotta);" onclick="deleteSavedRecord('${r.id||''}', ${idx})">Delete</button></td></tr>`).join('');
+}
+
+async function deleteSavedRecord(id, idx){
+  if(!id){
+    alert('This record was saved before delete support was added and has no unique ID — please delete its row directly in the Google Sheet instead.');
+    return;
+  }
+  if(!confirm('Delete this record permanently? This cannot be undone.')) return;
+  if(!API_URL){ alert('API_URL not set — nothing to delete on the server.'); return; }
+
+  try{
+    const res = await fetch(API_URL, {
+      method:'POST',
+      headers:{ 'Content-Type':'text/plain' },
+      body: JSON.stringify({ action:'deleteRecord', id })
+    });
+    const data = await res.json();
+    if(data.success){
+      window._allRecords = (window._allRecords||[]).filter(r=>r.id !== id);
+      renderRecordsTable(window._allRecords);
+      applyFilters();
+      applyAnalysisFilters();
+    } else {
+      alert('Delete failed: '+(data.error||'unknown error'));
+    }
+  }catch(err){
+    alert('Delete failed: '+err.message);
+  }
+}
+
+async function loadRecords(){
+  // Manual "Refresh from Sheet" — force a real re-fetch (e.g. to pick up
+  // entries saved from another device), then refresh every tab's view.
+  const body = document.getElementById('recordsBody');
+  if(!API_URL){
+    renderRecordsTable([]);
+    return;
+  }
+  body.innerHTML = '<tr><td colspan="13">Loading…</td></tr>';
+  try{
+    const list = await fetchAllRecords(true);
+    renderRecordsTable(list);
+    applyFilters();
+    applyAnalysisFilters();
+  }catch(err){
+    body.innerHTML = `<tr><td colspan="13" style="color:var(--terracotta)">Failed to load: ${err.message}</td></tr>`;
+  }
+}
+
+/* =====================================================================
+   ANALYSIS TAB — same Defect Log format as Entry tab, but showing
+   cumulative SQM (not pcs) from filtered saved records, with only
+   defects that actually have recorded SQM displayed.
+===================================================================== */
+async function initAnalysis(){
+  const status = document.getElementById('analysisFilterStatus');
+  status.textContent = 'Loading saved records…';
+  const list = await fetchAllRecords();
+  status.textContent = API_URL ? `${list.length} record(s) loaded.` : 'API_URL not set — connect it to analyze saved records.';
+  applyAnalysisFilters();
+}
+
+function getAnalysisFilterValues(){
+  return {
+    from: document.getElementById('aDateFrom').value,
+    to: document.getElementById('aDateTo').value,
+    type: document.getElementById('aType').value.trim().toUpperCase(),
+    texture: document.getElementById('aTexture').value,
+    size: document.getElementById('aSize').value,
+    gl: document.getElementById('aGL').value,
+    lot: document.getElementById('aLot').value.trim(),
+    shift: document.getElementById('aShift').value,
+    kiln: document.getElementById('aKiln').value
+  };
+}
+
+function formatDateDMY(iso){
+  if(!iso) return '';
+  const [y,m,d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+function buildAnalysisFilterMeta(f){
+  let dateLabel;
+  if(f.from && f.to) dateLabel = f.from === f.to ? formatDateDMY(f.from) : `${formatDateDMY(f.from)} – ${formatDateDMY(f.to)}`;
+  else if(f.from) dateLabel = `From ${formatDateDMY(f.from)}`;
+  else if(f.to) dateLabel = `Until ${formatDateDMY(f.to)}`;
+  else dateLabel = 'All Dates';
+
+  const shiftLabels = { M:'M — Morning', E:'E — Evening', N:'N — Night' };
+
+  return {
+    date: dateLabel,
+    gl: f.gl || 'All Glazing Lines',
+    kiln: f.kiln || 'All Kilns',
+    shift: f.shift ? shiftLabels[f.shift] : 'All Shifts',
+    type: f.type || 'All Types',
+    texture: f.texture || 'All Textures',
+    size: f.size || 'All Sizes',
+    lot: f.lot || 'All Lots'
+  };
+}
+
+function applyAnalysisFilters(){
+  const list = window._allRecords || [];
+  const f = getAnalysisFilterValues();
+  const filtered = list.filter(r=>{
+    if(f.from && r.date < f.from) return false;
+    if(f.to && r.date > f.to) return false;
+    if(f.type && !(r.type||'').toUpperCase().includes(f.type)) return false;
+    if(f.texture && r.texture !== f.texture) return false;
+    if(f.size && r.size !== f.size) return false;
+    if(f.gl && r.gl !== f.gl) return false;
+    if(f.lot && r.lot !== f.lot) return false;
+    if(f.shift && r.shift !== f.shift) return false;
+    if(f.kiln && r.kiln !== f.kiln) return false;
+    return true;
+  });
+  document.getElementById('analysisFilterStatus').textContent = `${filtered.length} of ${list.length} record(s) match.`;
+  const agg = aggregateRecords(filtered);
+  const meta = buildAnalysisFilterMeta(f);
+  renderAnalysisSummary(agg, meta);
+}
+
+function renderAnalysisSummary(agg, meta){
+  const leftBody = document.getElementById('analysisLeftBody');
+  const rightBody = document.getElementById('analysisRightBody');
+  window._latestAnalysisSummary = { agg, meta };
+
+  if(!agg || agg.grand <= 0){
+    const noData = '<tr><td colspan="2" style="color:var(--ink-soft); text-align:center; padding:20px;">No matching data for the current filter selection.</td></tr>';
+    leftBody.innerHTML = noData;
+    rightBody.innerHTML = noData;
+    return;
+  }
+
+  const cItems = [...agg.paretoItems].filter(x=>x.cPct>0).sort((a,b)=>b.cPct-a.cPct);
+  const damItems = [...agg.paretoItems].filter(x=>x.damPct>0).sort((a,b)=>b.damPct-a.damPct);
+
+  const infoRow = (label, value) => `<tr class="info"><td class="label">${label}</td><td class="value">${value}</td></tr>`;
+  const spacer = `<tr class="spacer"><td colspan="2"></td></tr>`;
+  const groupHeader = (cls, label, value) => `<tr class="group-header ${cls}"><td>${label}</td><td class="value">${value}</td></tr>`;
+  const subItem = (name, value) => `<tr class="sub-item"><td>${name}</td><td class="value">${value}</td></tr>`;
+  const emptyNote = (text) => `<tr class="empty-note"><td colspan="2">${text}</td></tr>`;
+
+  // Left column: filtered data, Yield%, and C Grade breakdown
+  let leftHtml = '';
+  leftHtml += infoRow('DATE', meta.date);
+  leftHtml += infoRow('GL', meta.gl);
+  leftHtml += infoRow('Kiln', meta.kiln);
+  leftHtml += infoRow('Shift', meta.shift);
+  leftHtml += infoRow('Type', meta.type);
+  leftHtml += infoRow('Texture', meta.texture);
+  leftHtml += infoRow('Size', meta.size);
+  leftHtml += infoRow('Lot', meta.lot);
+  leftHtml += infoRow('Production (SQM)', agg.grand.toFixed(2));
+  leftHtml += spacer;
+
+  leftHtml += groupHeader('yield', 'Yield%', pct(agg.sellablePct));
+  leftHtml += spacer;
+
+  leftHtml += groupHeader('cgrade', 'C grade%', pct(agg.cPct));
+  leftHtml += cItems.length ? cItems.map(x=>subItem(x.name, pct(x.cPct))).join('') : emptyNote('No C Grade defects recorded for this selection.');
+
+  // Right column: Damage breakdown only, kept separate so the page doesn't
+  // run long — sits alongside the left column instead of stacked below it.
+  let rightHtml = '';
+  rightHtml += groupHeader('damage', 'Damage%', pct(agg.damPct));
+  rightHtml += damItems.length ? damItems.map(x=>subItem(x.name, pct(x.damPct))).join('') : emptyNote('No Damage defects recorded for this selection.');
+
+  leftBody.innerHTML = leftHtml;
+  rightBody.innerHTML = rightHtml;
+}
+
+function exportAnalysisCSV(){
+  const src = window._latestAnalysisSummary;
+  if(!src || !src.agg || src.agg.grand <= 0){ alert('No data to export for the current filter selection.'); return; }
+  const { agg, meta } = src;
+
+  const cItems = [...agg.paretoItems].filter(x=>x.cPct>0).sort((a,b)=>b.cPct-a.cPct);
+  const damItems = [...agg.paretoItems].filter(x=>x.damPct>0).sort((a,b)=>b.damPct-a.damPct);
+
+  const rows = [
+    ['DATE', meta.date],
+    ['GL', meta.gl],
+    ['Kiln', meta.kiln],
+    ['Shift', meta.shift],
+    ['Type', meta.type],
+    ['Texture', meta.texture],
+    ['Size', meta.size],
+    ['Lot', meta.lot],
+    ['Production (SQM)', agg.grand.toFixed(2)],
+    [],
+    ['Yield%', (agg.sellablePct*100).toFixed(1)+'%'],
+    [],
+    ['C grade%', (agg.cPct*100).toFixed(1)+'%']
+  ];
+  cItems.forEach(x=> rows.push([x.name, (x.cPct*100).toFixed(1)+'%']));
+  rows.push([]);
+  rows.push(['Damage%', (agg.damPct*100).toFixed(1)+'%']);
+  damItems.forEach(x=> rows.push([x.name, (x.damPct*100).toFixed(1)+'%']));
+
+  const csv = rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `defect-analysis-summary-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+/* =====================================================================
+   DASHBOARD — cumulative, filterable analysis across saved records
+===================================================================== */
+async function fetchAllRecords(force){
+  if(window._allRecords && !force) return window._allRecords;
+  if(!API_URL){ window._allRecords = []; return []; }
+  const res = await fetch(`${API_URL}?action=getRecords`);
+  const data = await res.json();
+  window._allRecords = data.records || [];
+  return window._allRecords;
+}
+
+async function initDashboard(){
+  const status = document.getElementById('filterStatus');
+  status.textContent = 'Loading saved records…';
+  const list = await fetchAllRecords();
+  status.textContent = API_URL ? `${list.length} record(s) loaded.` : 'API_URL not set — connect it to analyze saved records.';
+  applyFilters();
+}
+
+function getFilterValues(){
+  return {
+    from: document.getElementById('fDateFrom').value,
+    to: document.getElementById('fDateTo').value,
+    type: document.getElementById('fType').value.trim().toUpperCase(),
+    texture: document.getElementById('fTexture').value,
+    size: document.getElementById('fSize').value,
+    gl: document.getElementById('fGL').value,
+    lot: document.getElementById('fLot').value.trim(),
+    shift: document.getElementById('fShift').value,
+    kiln: document.getElementById('fKiln').value
+  };
+}
+
+function applyFilters(){
+  const list = window._allRecords || [];
+  const f = getFilterValues();
+  const filtered = list.filter(r=>{
+    if(f.from && r.date < f.from) return false;
+    if(f.to && r.date > f.to) return false;
+    if(f.type && !(r.type||'').toUpperCase().includes(f.type)) return false;
+    if(f.texture && r.texture !== f.texture) return false;
+    if(f.size && r.size !== f.size) return false;
+    if(f.gl && r.gl !== f.gl) return false;
+    if(f.lot && r.lot !== f.lot) return false;
+    if(f.shift && r.shift !== f.shift) return false;
+    if(f.kiln && r.kiln !== f.kiln) return false;
+    return true;
+  });
+  document.getElementById('filterStatus').textContent = `${filtered.length} of ${list.length} record(s) match.`;
+  const agg = aggregateRecords(filtered);
+  renderChartsFromAggregate(agg);
+}
+
+function aggregateRecords(list){
+  const summarySum = {}; Object.keys(summary).forEach(k=>summarySum[k]=0);
+  const defectSum = DEFECTS.map(name=>({ name, c:0, f:0, i:0 }));
+
+  list.forEach(rec=>{
+    const s = rec.summary || {};
+    Object.keys(summarySum).forEach(k=> summarySum[k] += (+s[k] || 0));
+    (rec.defects || []).forEach(d=>{
+      const target = defectSum.find(x=>x.name === d.name);
+      if(target){
+        target.c += (+d.sqm2nd || 0);
+        target.f += (+d.sqmC || 0);
+        target.i += (+d.sqmDam || 0);
+      }
+    });
+  });
+
+  const grand = Object.values(summarySum).reduce((a,b)=>a+b,0);
+  const cGroup = summarySum.cGrade;
+  const damGroup = summarySum.dam;
+  const cStageTotal = summarySum.cGrade + summarySum.cSize + summarySum.cDiag + summarySum.cWarp;
+  const damStageTotal = summarySum.dam + summarySum.damSort + summarySum.damPolish + summarySum.damLiner + summarySum.damPlanner + summarySum.damKiln;
+  const sumC = defectSum.reduce((a,d)=>a+d.c,0);
+  const sumF = defectSum.reduce((a,d)=>a+d.f,0);
+  const sumI = defectSum.reduce((a,d)=>a+d.i,0);
+  const safeDiv = (a,b)=> b ? a/b : 0;
+
+  // Pareto items: each of the 40 logged defects contributes a C Grade % and a
+  // Damage % (their share of the C Grade / Damage production groups), PLUS
+  // the C Grade production sub-categories (Size Out, Diagonal, Warpage) and
+  // Damage production sub-categories (Sorting Damages ... Kiln Damages) are
+  // included as their own pareto items, since they represent additional
+  // defect-producing steps in those production stages.
+  //
+  // cPct/damPct = share of the OVERALL grand total (used by the Pareto chart).
+  // cShare/damShare = share of the TOTAL C Grade / TOTAL Damage stage only
+  // (used by the two pie charts below).
+  const paretoItems = defectSum.map(d=>{
+    const cNumerator = safeDiv(d.f,sumF)*cGroup;
+    const damNumerator = safeDiv(d.i,sumI)*damGroup;
+    return {
+      name: d.name,
+      cPct: safeDiv(cNumerator, grand),
+      damPct: safeDiv(damNumerator, grand),
+      cShare: safeDiv(cNumerator, cStageTotal),
+      damShare: safeDiv(damNumerator, damStageTotal)
+    };
+  });
+
+  const cSubCategories = [
+    ['Size Out (C Grade)', 'cSize'],
+    ['Diagonal (C Grade)', 'cDiag'],
+    ['Warpage / Centre Curv. (C Grade)', 'cWarp']
+  ];
+  cSubCategories.forEach(([label,key])=>{
+    paretoItems.push({
+      name: label,
+      cPct: safeDiv(summarySum[key], grand), damPct: 0,
+      cShare: safeDiv(summarySum[key], cStageTotal), damShare: 0
+    });
+  });
+
+  const damSubCategories = [
+    ['Sorting Damages', 'damSort'],
+    ['Before Polishing & SQ. Damage', 'damPolish'],
+    ['Liner', 'damLiner'],
+    ['Planner', 'damPlanner'],
+    ['Kiln Damages', 'damKiln']
+  ];
+  damSubCategories.forEach(([label,key])=>{
+    paretoItems.push({
+      name: label,
+      cPct: 0, damPct: safeDiv(summarySum[key], grand),
+      cShare: 0, damShare: safeDiv(summarySum[key], damStageTotal)
+    });
+  });
+
+  const sellablePct = safeDiv(summarySum.g1+summarySum.g2+summarySum.g2diag+summarySum.g2warp, grand);
+  const cPct = safeDiv(summarySum.cGrade+summarySum.cSize+summarySum.cDiag+summarySum.cWarp, grand);
+  const damPct = safeDiv(summarySum.dam+summarySum.damSort+summarySum.damPolish+summarySum.damLiner+summarySum.damPlanner+summarySum.damKiln, grand);
+
+  return { paretoItems, sellablePct, cPct, damPct, grand, recordCount: list.length };
+}
+
+/* =====================================================================
+   AI ASSISTANT — click-to-run preset analyses over saved records.
+   No free-text input; every question is a fixed, pre-defined query.
+===================================================================== */
+let aiVariationChart = null;
+
+function isoDaysAgo(n){
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.toISOString().slice(0,10);
+}
+
+function getRecordsInDateRange(fromISO, toISO){
+  const list = window._allRecords || [];
+  return list.filter(r => r.date >= fromISO && r.date <= toISO);
+}
+
+const AI_QUESTION_TITLES = {
+  'yesterday': "Yesterday's Quality Issues",
+  'lastweek': "Last Week's Quality Issues (7 days)",
+  'last10': "Last 10 Days' Quality Issues",
+  'recurring-damage': "Recurring Problem Defects — Damage",
+  'recurring-cgrade': "Recurring Problem Defects — C Grade",
+  'variation': "Defect Variation — Last 10 Days"
+};
+
+async function runAIQuestion(q){
+  const card = document.getElementById('aiResultCard');
+  const titleEl = document.getElementById('aiResultTitle');
+  const body = document.getElementById('aiResultBody');
+  card.style.display = 'block';
+  titleEl.innerHTML = `<span class="n">•</span> ${AI_QUESTION_TITLES[q] || 'Result'}`;
+  body.innerHTML = '<div class="ai-loading">Analyzing saved records…</div>';
+
+  await fetchAllRecords(); // ensure cache is fresh on first use
+
+  if(q === 'yesterday'){
+    const day = isoDaysAgo(1);
+    renderAIDateRangeResult(day, day, 'Yesterday');
+  } else if(q === 'lastweek'){
+    renderAIDateRangeResult(isoDaysAgo(7), isoDaysAgo(1), 'the last 7 days');
+  } else if(q === 'last10'){
+    renderAIDateRangeResult(isoDaysAgo(10), isoDaysAgo(1), 'the last 10 days');
+  } else if(q === 'recurring-damage'){
+    renderAIRecurringResult('dam');
+  } else if(q === 'recurring-cgrade'){
+    renderAIRecurringResult('c');
+  } else if(q === 'variation'){
+    renderAIVariationSetup();
+  }
+}
+
+/* ---- Q1-3: date range investigation ---- */
+function renderAIDateRangeResult(fromISO, toISO, label){
+  const body = document.getElementById('aiResultBody');
+  const records = getRecordsInDateRange(fromISO, toISO);
+
+  if(!records.length){
+    body.innerHTML = `<div class="ai-summary-line">No saved records found for ${label} (${formatDateDMY(fromISO)}${fromISO!==toISO ? ' – '+formatDateDMY(toISO) : ''}).</div>`;
+    return;
+  }
+
+  const agg = aggregateRecords(records);
+  const cItems = [...agg.paretoItems].filter(x=>x.cPct>0).sort((a,b)=>b.cPct-a.cPct);
+  const damItems = [...agg.paretoItems].filter(x=>x.damPct>0).sort((a,b)=>b.damPct-a.damPct);
+  const topOverall = [...agg.paretoItems].sort((a,b)=>(b.cPct+b.damPct)-(a.cPct+a.damPct)).slice(0,10);
+
+  const summaryLine = `Covering <b>${records.length}</b> saved record(s) from ${formatDateDMY(fromISO)}${fromISO!==toISO ? ' to '+formatDateDMY(toISO) : ''} — Total Production <b>${agg.grand.toFixed(2)} SQM</b>, Yield <b>${pct(agg.sellablePct)}</b>, C Grade <b>${pct(agg.cPct)}</b>, Damage <b>${pct(agg.damPct)}</b>.`;
+
+  const subItem = (name,val) => `<tr class="sub-item"><td>${name}</td><td class="value">${val}</td></tr>`;
+  const groupHeader = (cls,label,val) => `<tr class="group-header ${cls}"><td>${label}</td><td class="value">${val}</td></tr>`;
+  const emptyNote = (t) => `<tr class="empty-note"><td colspan="2">${t}</td></tr>`;
+
+  const leftRows = groupHeader('cgrade','C grade%', pct(agg.cPct)) +
+    (cItems.length ? cItems.map(x=>subItem(x.name, pct(x.cPct))).join('') : emptyNote('No C Grade defects in this period.'));
+  const rightRows = groupHeader('damage','Damage%', pct(agg.damPct)) +
+    (damItems.length ? damItems.map(x=>subItem(x.name, pct(x.damPct))).join('') : emptyNote('No Damage defects in this period.'));
+
+  body.innerHTML = `
+    <div class="ai-summary-line">${summaryLine}</div>
+    <div class="chart-box" style="height:320px; margin-bottom:18px;"><canvas id="aiParetoChart"></canvas></div>
+    <div class="analysis-grid">
+      <div class="summary-table-inner"><table class="summary-table"><tbody>${leftRows}</tbody></table></div>
+      <div class="summary-table-inner"><table class="summary-table"><tbody>${rightRows}</tbody></table></div>
+    </div>`;
+
+  const ctx = document.getElementById('aiParetoChart');
+  new Chart(ctx, {
+    type:'bar',
+    data:{ labels: topOverall.map(x=>x.name), datasets:[
+      { label:'C Grade %', data: topOverall.map(x=>+(x.cPct*100).toFixed(2)), backgroundColor:'#FFAC14', borderRadius:3 },
+      { label:'Damage %', data: topOverall.map(x=>+(x.damPct*100).toFixed(2)), backgroundColor:'#FF2414', borderRadius:3 }
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ position:'bottom' },
+        datalabels:{ display: ctx => ctx.dataset.data[ctx.dataIndex] > 0, color:'#fff', font:{size:9,weight:'700'}, anchor:'center', align:'center', formatter: v=>v+'%' } },
+      scales:{ x:{ stacked:true, ticks:{ autoSkip:false, maxRotation:60, minRotation:40, font:{size:9} } }, y:{ stacked:true, ticks:{ callback:v=>v+'%' } } } }
+  });
+}
+
+/* ---- Q4-5: recurring problem detection ---- */
+function monthStartISO(){
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
+}
+
+function renderAIRecurringResult(grade){
+  const body = document.getElementById('aiResultBody');
+  const gradeLabel = grade==='c' ? 'C Grade' : 'Damage';
+
+  const recentFrom = isoDaysAgo(10), recentTo = isoDaysAgo(1);
+  const restFrom = monthStartISO();
+  const restTo = isoDaysAgo(11); // the day right before the last-10-days window starts
+
+  if(restFrom > restTo){
+    body.innerHTML = `<div class="ai-summary-line">This month hasn't had enough days before the last 10-day window yet to compare against (the last 10 days already covers most or all of the month so far). Check back later in the month for a meaningful comparison.</div>`;
+    return;
+  }
+
+  const recentRecords = getRecordsInDateRange(recentFrom, recentTo);
+  const restRecords = getRecordsInDateRange(restFrom, restTo);
+
+  if(!recentRecords.length || !restRecords.length){
+    const missing = !recentRecords.length ? 'the last 10 days' : 'the rest of this month';
+    body.innerHTML = `<div class="ai-summary-line">No saved records found for ${missing} (${formatDateDMY(!recentRecords.length?recentFrom:restFrom)} – ${formatDateDMY(!recentRecords.length?recentTo:restTo)}) — need data in both periods to compare.</div>`;
+    return;
+  }
+
+  // Compare each defect's % contribution in the last 10 days against its %
+  // contribution across the rest of this month (from the 1st of the month
+  // up to the day before the last-10-days window). A higher % recently
+  // than earlier this month signals a rising, recurring problem.
+  const key = grade==='c' ? 'cPct' : 'damPct';
+  const restAgg = aggregateRecords(restRecords);
+  const recentAgg = aggregateRecords(recentRecords);
+
+  const combined = restAgg.paretoItems.map((e,idx)=>{
+    const r = recentAgg.paretoItems[idx];
+    return { name: e.name, earlier: e[key], recent: r[key], delta: r[key]-e[key] };
+  }).filter(x=>x.earlier>0 || x.recent>0);
+
+  const rising = combined.filter(x=>x.delta>0).sort((a,b)=>b.delta-a.delta).slice(0,8);
+
+  if(!rising.length){
+    body.innerHTML = `<div class="ai-summary-line">No ${gradeLabel} defects show a rise in the last 10 days (${formatDateDMY(recentFrom)} – ${formatDateDMY(recentTo)}) compared to the rest of this month (${formatDateDMY(restFrom)} – ${formatDateDMY(restTo)}) — nothing stands out as a growing recurring problem right now.</div>`;
+    return;
+  }
+
+  const top = rising[0];
+  const summaryLine = `Comparing the last 10 days (${formatDateDMY(recentFrom)} – ${formatDateDMY(recentTo)}) against the rest of this month (${formatDateDMY(restFrom)} – ${formatDateDMY(restTo)}): <b>${top.name}</b> shows the sharpest rise in ${gradeLabel}, up from ${pct(top.earlier)} to ${pct(top.recent)} (+${pct(top.delta)}).`;
+
+  const rows = rising.map(x=>`
+    <tr class="sub-item">
+      <td>${x.name}</td>
+      <td class="value" style="color:var(--ink-soft); font-weight:500;">${pct(x.earlier)} → ${pct(x.recent)}</td>
+      <td class="value" style="color:${grade==='c'?'var(--amber)':'var(--terracotta)'};">▲ +${pct(x.delta)}</td>
+    </tr>`).join('');
+
+  body.innerHTML = `
+    <div class="ai-summary-line">${summaryLine}</div>
+    <div class="chart-box" style="height:${Math.max(220, rising.length*36)}px; margin-bottom:18px;"><canvas id="aiRecurringChart"></canvas></div>
+    <div class="summary-table-inner" style="max-width:640px;">
+      <table class="summary-table">
+        <thead><tr><td class="label" style="font-weight:700;">Defect</td><td class="value" style="font-weight:700;">Rest of Month → Last 10 Days</td><td class="value" style="font-weight:700;">Change</td></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+
+  const ctx = document.getElementById('aiRecurringChart');
+  new Chart(ctx, {
+    type:'bar',
+    data:{ labels: rising.map(x=>x.name), datasets:[{ label:'Increase in '+gradeLabel+' %', data: rising.map(x=>+(x.delta*100).toFixed(2)), backgroundColor: grade==='c' ? '#FFAC14' : '#FF2414', borderRadius:3 }]},
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false},
+        datalabels:{ color: grade==='c' ? '#7a5200' : '#fff', font:{size:10,weight:'700'}, anchor:'end', align:'right', formatter:v=>'+'+v+'%' } },
+      scales:{ x:{ ticks:{ callback:v=>v+'%' } } } }
+  });
+}
+
+/* ---- Q6: specific defect variation over last 10 days (line chart) ---- */
+// Full list of selectable "defects" for the variation chart: the 40 logged
+// defect types, plus the C Grade production sub-categories and Damage
+// production sub-categories — same items the Pareto chart and pie charts
+// treat as pareto contributors.
+const AI_VARIATION_ITEMS = [
+  ...DEFECTS.map(name=>({ name, type:'defect' })),
+  { name:'Diagonal (C Grade)', type:'c-sub', key:'cDiag' },
+  { name:'Size Out (C Grade)', type:'c-sub', key:'cSize' },
+  { name:'Warpage / Centre Curv. (C Grade)', type:'c-sub', key:'cWarp' },
+  { name:'Sorting Damages', type:'dam-sub', key:'damSort' },
+  { name:'Before Polishing & SQ. Damage', type:'dam-sub', key:'damPolish' },
+  { name:'Liner', type:'dam-sub', key:'damLiner' },
+  { name:'Planner', type:'dam-sub', key:'damPlanner' },
+  { name:'Kiln Damages', type:'dam-sub', key:'damKiln' }
+];
+
+function renderAIVariationSetup(){
+  const body = document.getElementById('aiResultBody');
+  const options = AI_VARIATION_ITEMS.map(item=>`<option value="${item.name}">${item.name}</option>`).join('');
+  body.innerHTML = `
+    <div class="ai-variation-controls">
+      <div class="field">
+        <label>Choose a defect</label>
+        <select id="aiVariationDefect"><option value="">Select a defect…</option>${options}</select>
+      </div>
+      <button class="btn primary" id="aiVariationShow">Show Chart</button>
+    </div>
+    <div id="aiVariationChartWrap"></div>`;
+
+  document.getElementById('aiVariationShow').addEventListener('click', ()=>{
+    const name = document.getElementById('aiVariationDefect').value;
+    if(!name){ alert('Please select a defect first.'); return; }
+    renderAIVariationChart(name);
+  });
+}
+
+function renderAIVariationChart(itemName){
+  const wrap = document.getElementById('aiVariationChartWrap');
+  const item = AI_VARIATION_ITEMS.find(x=>x.name===itemName);
+  const from = isoDaysAgo(9), to = isoDaysAgo(0); // last 10 calendar days including today
+
+  const days = [];
+  for(let i=9; i>=0; i--) days.push(isoDaysAgo(i));
+
+  const records = getRecordsInDateRange(from, to);
+  const safeDiv = (a,b)=> b ? a/b : 0;
+
+  const cSeries = [], damSeries = [];
+  days.forEach(day=>{
+    const dayRecords = records.filter(r=>r.date===day);
+    let dayGrand = 0, cSQM = 0, damSQM = 0;
+
+    dayRecords.forEach(rec=>{
+      const s = rec.summary || {};
+      dayGrand += Object.values(s).reduce((a,v)=>a+(+v||0), 0);
+
+      if(item.type === 'defect'){
+        const d = (rec.defects||[]).find(x=>x.name===item.name);
+        if(d){ cSQM += (+d.sqmC||0); damSQM += (+d.sqmDam||0); }
+      } else if(item.type === 'c-sub'){
+        cSQM += (+s[item.key]||0);
+      } else if(item.type === 'dam-sub'){
+        damSQM += (+s[item.key]||0);
+      }
+    });
+
+    cSeries.push(+(safeDiv(cSQM, dayGrand)*100).toFixed(2));
+    damSeries.push(+(safeDiv(damSQM, dayGrand)*100).toFixed(2));
+  });
+
+  const hasAnyData = cSeries.some(v=>v>0) || damSeries.some(v=>v>0);
+  wrap.innerHTML = `<div class="chart-box" style="height:340px; margin-top:16px;"><canvas id="aiVariationCanvas"></canvas></div>` +
+    (hasAnyData ? '' : `<div class="ai-summary-line" style="margin-top:10px;">No recorded data for "${itemName}" in the last 10 days — both lines below will be flat at zero.</div>`);
+
+  const datasets = [];
+  if(item.type !== 'dam-sub'){
+    datasets.push({ label:'C Grade %', data: cSeries, borderColor:'#FFAC14', backgroundColor:'rgba(255,172,20,0.12)', fill:true, tension:0.25, pointRadius:4, pointBackgroundColor:'#FFAC14' });
+  }
+  if(item.type !== 'c-sub'){
+    datasets.push({ label:'Damage %', data: damSeries, borderColor:'#FF2414', backgroundColor:'rgba(255,36,20,0.10)', fill:true, tension:0.25, pointRadius:4, pointBackgroundColor:'#FF2414' });
+  }
+
+  const ctx = document.getElementById('aiVariationCanvas');
+  if(aiVariationChart) aiVariationChart.destroy();
+  aiVariationChart = new Chart(ctx, {
+    type:'line',
+    data:{ labels: days.map(formatDateDMY), datasets },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ display:true, position:'bottom' }, datalabels:{ display:false },
+        tooltip:{ callbacks:{ label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y}%` } } },
+      scales:{ y:{ beginAtZero:true, title:{ display:true, text:'% of Production' }, ticks:{ callback:v=>v+'%' } } } }
+  });
+}
+
+function renderChartsFromAggregate(agg){
+  document.getElementById('kpiTotal').textContent = agg.grand.toFixed(2);
+  document.getElementById('kpiSellable').textContent = pct(agg.sellablePct);
+  document.getElementById('kpiC').textContent = pct(agg.cPct);
+  document.getElementById('kpiDam').textContent = pct(agg.damPct);
+  window._latestAgg = agg;
+  renderCharts(agg);
+}
+
+/* =====================================================================
+   FIREBASE AUTHENTICATION — login screen gates the dashboard
+===================================================================== */
+const firebaseConfig = {
+  apiKey: "AIzaSyDoCnYyMDmsF9OR4D9IoHjV4dgS7lJYgOE",
+  authDomain: "lankatiles-defectsqa.firebaseapp.com",
+  projectId: "lankatiles-defectsqa",
+  storageBucket: "lankatiles-defectsqa.firebasestorage.app",
+  messagingSenderId: "1037347134802",
+  appId: "1:1037347134802:web:df5dc9d6377f8446d5ee8b"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+
+let appInitialized = false;
+
+// Require sign-in every time the page loads — no staying logged in across
+// visits/reloads. setPersistence(NONE) stops future sign-ins from being
+// remembered; signing out clears any session saved by an earlier version
+// of this page (before this setting existed). The auth listener only
+// attaches after that cleanup finishes, so there's no flash of the
+// dashboard before it drops back to the login screen.
+auth.setPersistence(firebase.auth.Auth.Persistence.NONE)
+  .then(() => auth.signOut())
+  .catch(err => console.error('Auth persistence setup failed:', err))
+  .finally(() => {
+    auth.onAuthStateChanged(user => {
+      const loginScreen = document.getElementById('loginScreen');
+      const appContent = document.getElementById('appContent');
+      if(user){
+        loginScreen.style.display = 'none';
+        appContent.style.display = 'block';
+        document.getElementById('userEmail').textContent = user.email;
+        if(!appInitialized){ appInitialized = true; init(); }
+      } else {
+        loginScreen.style.display = 'flex';
+        appContent.style.display = 'none';
+      }
+    });
+  });
+
+document.getElementById('loginForm').addEventListener('submit', e=>{
+  e.preventDefault();
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const errorBox = document.getElementById('loginError');
+  const submitBtn = document.getElementById('loginSubmit');
+  errorBox.textContent = '';
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Signing in…';
+
+  auth.signInWithEmailAndPassword(email, password)
+    .catch(err => {
+      errorBox.textContent = err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found'
+        ? 'Incorrect email or password.'
+        : err.message;
+    })
+    .finally(() => {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Sign In';
+    });
+});
+
+document.getElementById('signOutLink').addEventListener('click', e=>{
+  e.preventDefault();
+  auth.signOut();
+});
+</script>
+</div>
+</body>
+</html>
