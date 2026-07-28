@@ -323,6 +323,21 @@
   .login-error{
     color:var(--terracotta); font-size:12.5px; min-height:18px; margin-top:2px;
   }
+
+  /* ---------- In-page confirmation modal ---------- */
+  .modal-overlay{
+    position:fixed; inset:0; z-index:150;
+    background:rgba(10,40,40,0.45);
+    display:flex; align-items:center; justify-content:center; padding:20px;
+  }
+  .modal-card{
+    background:#fff; border-radius:12px; padding:22px 24px; width:100%; max-width:400px;
+    box-shadow:0 20px 50px rgba(10,40,40,0.35);
+  }
+  .modal-card p{ font-size:14px; color:var(--ink); margin:0 0 20px; line-height:1.55; }
+  .modal-card p b{ color:var(--teal-deep); }
+  .modal-actions{ display:flex; gap:10px; justify-content:flex-end; }
+  .modal-actions .btn{ min-width:110px; }
 </style>
 </head>
 <body>
@@ -415,6 +430,17 @@
         <div class="field">
           <label>Kiln <span style="font-weight:400;text-transform:none;">(auto)</span></label>
           <input type="text" id="jKiln" readonly placeholder="Auto from GL">
+        </div>
+      </div>
+    </div>
+
+    <!-- New Type confirmation modal (in-page, not a browser prompt) -->
+    <div id="newTypeModal" class="modal-overlay" style="display:none;">
+      <div class="modal-card">
+        <p id="newTypeModalMessage"></p>
+        <div class="modal-actions">
+          <button type="button" class="btn ghost" id="newTypeModalNo">No, Skip</button>
+          <button type="button" class="btn primary" id="newTypeModalYes">Yes, Add</button>
         </div>
       </div>
     </div>
@@ -765,6 +791,22 @@ function init(){
   recalcAll();
   tickClock();
   setInterval(tickClock, 1000*30);
+  syncMasterTypeList();
+}
+
+async function syncMasterTypeList(){
+  if(!API_URL) return;
+  try{
+    const res = await fetch(`${API_URL}?action=getTypes`);
+    const data = await res.json();
+    if(data.success && Array.isArray(data.types)){
+      data.types.forEach(t=>{
+        if(t && !TYPE_CODES.some(x=>x.toUpperCase()===t.toUpperCase())) TYPE_CODES.push(t);
+      });
+    }
+  }catch(err){
+    console.error('Could not sync master type list:', err);
+  }
 }
 
 function tickClock(){
@@ -840,6 +882,8 @@ function wireEvents(){
 
   document.getElementById('jGL').addEventListener('change', updateKiln);
   updateKiln();
+
+  document.getElementById('jType').addEventListener('blur', checkForNewMasterType);
 
   document.getElementById('defectBody').addEventListener('input', e=>{
     if(!e.target.classList.contains('qty')) return;
@@ -1028,6 +1072,60 @@ function deriveKiln(gl){
 
 function updateKiln(){
   document.getElementById('jKiln').value = deriveKiln(document.getElementById('jGL').value);
+}
+
+let promptedNewTypes = new Set(); // avoids re-prompting for the same value repeatedly in one session
+
+function checkForNewMasterType(){
+  const val = document.getElementById('jType').value.trim();
+  if(!val) return;
+  const upper = val.toUpperCase();
+  const exists = TYPE_CODES.some(t=>t.toUpperCase()===upper);
+  if(exists || promptedNewTypes.has(upper)) return;
+  promptedNewTypes.add(upper);
+  showNewTypeModal(val);
+}
+
+function showNewTypeModal(val){
+  const modal = document.getElementById('newTypeModal');
+  const yesBtn = document.getElementById('newTypeModalYes');
+  const noBtn = document.getElementById('newTypeModalNo');
+  document.getElementById('newTypeModalMessage').innerHTML = `"<b>${val}</b>" is not in the master Type list. Add it for future use?`;
+  modal.style.display = 'flex';
+
+  function cleanup(){
+    modal.style.display = 'none';
+    yesBtn.removeEventListener('click', onYes);
+    noBtn.removeEventListener('click', onNo);
+  }
+  function onYes(){ cleanup(); saveNewTypeToMasterList(val); }
+  function onNo(){ cleanup(); }
+
+  yesBtn.addEventListener('click', onYes);
+  noBtn.addEventListener('click', onNo);
+}
+
+async function saveNewTypeToMasterList(val){
+  if(!API_URL){
+    alert('API_URL not set — the new Type could not be saved to the master list (only affects this session).');
+    return;
+  }
+  try{
+    const res = await fetch(API_URL, {
+      method:'POST',
+      headers:{ 'Content-Type':'text/plain' },
+      body: JSON.stringify({ action:'addType', type: val })
+    });
+    const data = await res.json();
+    if(data.success){
+      if(!TYPE_CODES.some(t=>t.toUpperCase()===val.toUpperCase())) TYPE_CODES.push(val);
+      alert(`"${val}" has been added to the master Type list.`);
+    } else {
+      alert('Could not save the new Type: '+(data.error||'unknown error'));
+    }
+  }catch(err){
+    alert('Could not save the new Type: '+err.message);
+  }
 }
 
 function deriveTexture(t){
