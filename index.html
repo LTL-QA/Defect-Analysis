@@ -164,6 +164,21 @@
     font-family:var(--font-mono); text-align:right; font-size:12.5px;
   }
   .sumrow input:focus{ outline:none; border-color:var(--teal); }
+  .sumval{
+    width:78px; padding:5px 7px; border:1px solid transparent; border-radius:6px;
+    font-family:var(--font-mono); text-align:right; font-size:12.5px; color:var(--ink);
+  }
+
+  /* ---------- Section 5 format toggle ---------- */
+  .format-toggle{ display:flex; gap:8px; margin-bottom:16px; }
+  .format-toggle-btn{
+    padding:8px 16px; border-radius:8px; border:1px solid var(--panel-line); background:#fff;
+    font-family:var(--font-ui); font-weight:600; font-size:12.5px; color:var(--ink-soft); cursor:pointer;
+  }
+  .format-toggle-btn:hover{ border-color:var(--teal); color:var(--teal-deep); }
+  .format-toggle-btn.active{ background:var(--teal); border-color:var(--teal); color:#fff; }
+  .analysis-format-view{ display:none; }
+  .analysis-format-view.active{ display:block; }
   .sumrow .pctbadge{
     width:52px; text-align:right; font-family:var(--font-mono); font-size:12px;
     color:var(--ink-soft); font-weight:600; flex-shrink:0;
@@ -656,23 +671,97 @@
     </div>
 
     <div class="card">
-      <h2><span class="n">5</span> Defect Analysis Summary <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--ink-soft)">— filtered results, defects ranked by % contribution under each grade</span></h2>
-      <div class="analysis-grid">
-        <div class="summary-table-inner">
-          <table class="summary-table" id="analysisLeftTable">
-            <tbody id="analysisLeftBody">
-              <tr><td colspan="2" style="color:var(--ink-soft); text-align:center; padding:20px;">No matching data yet — connect API_URL and save some records.</td></tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="summary-table-inner">
-          <table class="summary-table" id="analysisRightTable">
-            <tbody id="analysisRightBody">
-              <tr><td colspan="2" style="color:var(--ink-soft); text-align:center; padding:20px;">No matching data yet.</td></tr>
-            </tbody>
-          </table>
+      <h2><span class="n">5</span> Defect Analysis Summary <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--ink-soft)">— filtered results from Section 4</span></h2>
+      <div class="format-toggle">
+        <button type="button" class="format-toggle-btn active" data-format="summary">Defect Summary</button>
+        <button type="button" class="format-toggle-btn" data-format="foqa">FO/QA/07 Format</button>
+      </div>
+
+      <div id="analysisFormatSummary" class="analysis-format-view active">
+        <div class="analysis-grid">
+          <div class="summary-table-inner">
+            <table class="summary-table" id="analysisLeftTable">
+              <tbody id="analysisLeftBody">
+                <tr><td colspan="2" style="color:var(--ink-soft); text-align:center; padding:20px;">No matching data yet — connect API_URL and save some records.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="summary-table-inner">
+            <table class="summary-table" id="analysisRightTable">
+              <tbody id="analysisRightBody">
+                <tr><td colspan="2" style="color:var(--ink-soft); text-align:center; padding:20px;">No matching data yet.</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
+
+      <div id="analysisFormatFOQA" class="analysis-format-view">
+        <div class="table-wrap">
+          <table class="defects">
+            <thead>
+              <tr class="grp">
+                <th rowspan="2">Def<br>No</th>
+                <th rowspan="2" style="text-align:left">Defect Description</th>
+                <th colspan="3" class="grp-2nd">2nd Grade</th>
+                <th colspan="3" class="grp-c">C Grade</th>
+                <th colspan="3" class="grp-dam">Damage</th>
+                <th rowspan="2">Total<br>Impact</th>
+              </tr>
+              <tr class="grp">
+                <th class="grp-2nd">SQM</th><th class="grp-2nd">%</th><th class="grp-2nd">In Prod %</th>
+                <th class="grp-c">SQM</th><th class="grp-c">%</th><th class="grp-c">In Prod %</th>
+                <th class="grp-dam">SQM</th><th class="grp-dam">%</th><th class="grp-dam">In Prod %</th>
+              </tr>
+            </thead>
+            <tbody id="foqaDefectBody">
+              <tr><td colspan="12" style="color:var(--ink-soft); text-align:center; padding:16px;">No matching data yet.</td></tr>
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colspan="2">TOTAL</td>
+                <td id="foqaFC"></td><td>100%</td><td id="foqaFE"></td>
+                <td id="foqaFF"></td><td>100%</td><td id="foqaFH"></td>
+                <td id="foqaFI"></td><td>100%</td><td id="foqaFK"></td>
+                <td id="foqaFL"></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <div class="sumgrid" style="margin-top:16px;">
+          <div class="sumgroup g-1">
+            <h3 style="color:var(--good)">Sellable</h3>
+            <div class="sumrow"><label>1st Grade</label><span class="sumval" id="foqa-g1">0.00</span><span class="pctbadge" id="foqa-pct-g1">0.0%</span></div>
+            <div class="sumrow"><label>2nd Grade</label><span class="sumval" id="foqa-g2">0.00</span><span class="pctbadge" id="foqa-pct-g2">0.0%</span></div>
+            <div class="sumrow"><label>Diagonal (2nd)</label><span class="sumval" id="foqa-g2diag">0.00</span><span class="pctbadge" id="foqa-pct-g2diag">0.0%</span></div>
+            <div class="sumrow"><label>Warpage / Centre Curv. (2nd)</label><span class="sumval" id="foqa-g2warp">0.00</span><span class="pctbadge" id="foqa-pct-g2warp">0.0%</span></div>
+          </div>
+          <div class="sumgroup g-c">
+            <h3 style="color:var(--amber)">"C" Grade</h3>
+            <div class="sumrow"><label>C Grade</label><span class="sumval" id="foqa-cGrade">0.00</span><span class="pctbadge" id="foqa-pct-cGrade">0.0%</span></div>
+            <div class="sumrow"><label>Size Out</label><span class="sumval" id="foqa-cSize">0.00</span><span class="pctbadge" id="foqa-pct-cSize">0.0%</span></div>
+            <div class="sumrow"><label>Diagonal (C)</label><span class="sumval" id="foqa-cDiag">0.00</span><span class="pctbadge" id="foqa-pct-cDiag">0.0%</span></div>
+            <div class="sumrow"><label>Warpage / Centre Curv. (C)</label><span class="sumval" id="foqa-cWarp">0.00</span><span class="pctbadge" id="foqa-pct-cWarp">0.0%</span></div>
+          </div>
+          <div class="sumgroup g-d">
+            <h3 style="color:var(--terracotta)">Damages</h3>
+            <div class="sumrow"><label>Damages</label><span class="sumval" id="foqa-dam">0.00</span><span class="pctbadge" id="foqa-pct-dam">0.0%</span></div>
+            <div class="sumrow"><label>Sorting Damages</label><span class="sumval" id="foqa-damSort">0.00</span><span class="pctbadge" id="foqa-pct-damSort">0.0%</span></div>
+            <div class="sumrow"><label>Before Polishing & SQ.</label><span class="sumval" id="foqa-damPolish">0.00</span><span class="pctbadge" id="foqa-pct-damPolish">0.0%</span></div>
+            <div class="sumrow"><label>Liner</label><span class="sumval" id="foqa-damLiner">0.00</span><span class="pctbadge" id="foqa-pct-damLiner">0.0%</span></div>
+            <div class="sumrow"><label>Planner</label><span class="sumval" id="foqa-damPlanner">0.00</span><span class="pctbadge" id="foqa-pct-damPlanner">0.0%</span></div>
+            <div class="sumrow"><label>Kiln Damages</label><span class="sumval" id="foqa-damKiln">0.00</span><span class="pctbadge" id="foqa-pct-damKiln">0.0%</span></div>
+          </div>
+        </div>
+        <div class="sumtotal"><span>Grand Total SQM</span><span id="foqaGrandTotal">0.00</span></div>
+        <div class="kpis kpis-3" style="margin-top:14px; margin-bottom:0;">
+          <div class="kpi good"><div class="label">Saleable Yield %</div><div class="value" id="foqaSellable">0.0%</div></div>
+          <div class="kpi c"><div class="label">C Grade %</div><div class="value" id="foqaCGrade">0.0%</div></div>
+          <div class="kpi dam"><div class="label">Damage %</div><div class="value" id="foqaDamage">0.0%</div></div>
+        </div>
+      </div>
+
       <div class="actions">
         <button class="btn ghost" id="btnExportAnalysisCSV">Export CSV</button>
       </div>
@@ -723,6 +812,10 @@
         <button class="ai-question" data-q="variation">
           <span class="ai-q-icon">📉</span>
           <span>Last 10 days — specific defect variation (line chart)</span>
+        </button>
+        <button class="ai-question" data-q="squaring">
+          <span class="ai-q-icon">⚙️</span>
+          <span>Last 10 days — Squaring Machine defects (combined line chart)</span>
         </button>
       </div>
     </div>
@@ -948,6 +1041,16 @@ function wireEvents(){
     applyAnalysisFilters();
   });
   document.getElementById('btnExportAnalysisCSV').addEventListener('click', exportAnalysisCSV);
+
+  document.querySelectorAll('.format-toggle-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.format-toggle-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll('.analysis-format-view').forEach(v=>v.classList.remove('active'));
+      const targetId = btn.dataset.format === 'summary' ? 'analysisFormatSummary' : 'analysisFormatFOQA';
+      document.getElementById(targetId).classList.add('active');
+    });
+  });
 
   document.querySelectorAll('.ai-question').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
@@ -1588,6 +1691,9 @@ function applyAnalysisFilters(){
   const agg = aggregateRecords(filtered);
   const meta = buildAnalysisFilterMeta(f);
   renderAnalysisSummary(agg, meta);
+
+  const foqaData = computeFOQAFormat(filtered);
+  renderFOQAFormat(foqaData);
 }
 
 function renderAnalysisSummary(agg, meta){
@@ -1638,6 +1744,108 @@ function renderAnalysisSummary(agg, meta){
 
   leftBody.innerHTML = leftHtml;
   rightBody.innerHTML = rightHtml;
+}
+
+/* =====================================================================
+   FO/QA/07 FORMAT — same layout as Section 2 (Defect Log) + Section 3
+   (Grade Summary), but read-only and built from the Section 4-filtered
+   record set instead of live entry. Uses SQM (not pcs) since it's
+   aggregating across possibly many records with different tile sizes.
+===================================================================== */
+function computeFOQAFormat(list){
+  const summarySum = {}; Object.keys(summary).forEach(k=>summarySum[k]=0);
+  const defectSum = DEFECTS.map(name=>({ name, c:0, f:0, i:0 }));
+
+  list.forEach(rec=>{
+    const s = rec.summary || {};
+    Object.keys(summarySum).forEach(k=> summarySum[k] += (+s[k] || 0));
+    (rec.defects || []).forEach(d=>{
+      const target = defectSum.find(x=>x.name === d.name);
+      if(target){
+        target.c += (+d.sqm2nd || 0);
+        target.f += (+d.sqmC || 0);
+        target.i += (+d.sqmDam || 0);
+      }
+    });
+  });
+
+  const grand = Object.values(summarySum).reduce((a,b)=>a+b,0);
+  const secondGroup = summarySum.g2 + summarySum.g2diag + summarySum.g2warp;
+  const cGroup = summarySum.cGrade;
+  const damGroup = summarySum.dam;
+  const sumC = defectSum.reduce((a,d)=>a+d.c,0);
+  const sumF = defectSum.reduce((a,d)=>a+d.f,0);
+  const sumI = defectSum.reduce((a,d)=>a+d.i,0);
+  const safeDiv = (a,b)=> b ? a/b : 0;
+
+  const defects = defectSum.map(d=>{
+    const dPct = safeDiv(d.c, sumC);
+    const e = safeDiv(dPct*secondGroup, grand);
+    const gPct = safeDiv(d.f, sumF);
+    const h = safeDiv(gPct*cGroup, grand);
+    const jPct = safeDiv(d.i, sumI);
+    const k = safeDiv(jPct*damGroup, grand);
+    return { name: d.name, c:d.c, d:dPct, e, f:d.f, g:gPct, h, i:d.i, j:jPct, k, l:e+h+k };
+  });
+
+  const sellablePct = safeDiv(summarySum.g1+summarySum.g2+summarySum.g2diag+summarySum.g2warp, grand);
+  const cPct = safeDiv(summarySum.cGrade+summarySum.cSize+summarySum.cDiag+summarySum.cWarp, grand);
+  const damPct = safeDiv(summarySum.dam+summarySum.damSort+summarySum.damPolish+summarySum.damLiner+summarySum.damPlanner+summarySum.damKiln, grand);
+
+  // TOTAL row: C Grade / Damage match their own single line item only
+  // (not the combined stage total with sub-categories) — same rule used
+  // in the live Entry tab. 2nd Grade matches Total Saleable Yield.
+  const fE = safeDiv(summarySum.g1 + secondGroup, grand);
+  const fH = safeDiv(cGroup, grand);
+  const fK = safeDiv(damGroup, grand);
+
+  return { defects, summarySum, grand, sumC, sumF, sumI, sellablePct, cPct, damPct, fE, fH, fK, fL: fE+fH+fK };
+}
+
+function renderFOQAFormat(data){
+  const body = document.getElementById('foqaDefectBody');
+  const shown = data.defects.filter(d=> d.c>0 || d.f>0 || d.i>0);
+
+  if(!shown.length){
+    body.innerHTML = '<tr><td colspan="12" style="color:var(--ink-soft); text-align:center; padding:16px;">No defects recorded for the current filter selection.</td></tr>';
+  } else {
+    body.innerHTML = shown.map(d=>`
+      <tr>
+        <td class="num">${DEFECTS.indexOf(d.name)+1}</td>
+        <td class="desc">${d.name}</td>
+        <td class="num${d.c>0?' filled-cell':''}">${d.c>0?d.c.toFixed(2):''}</td>
+        <td class="num">${d.c>0?pct(d.d):''}</td>
+        <td class="num">${d.c>0?pct(d.e,2):''}</td>
+        <td class="num${d.f>0?' filled-cell':''}">${d.f>0?d.f.toFixed(2):''}</td>
+        <td class="num">${d.f>0?pct(d.g):''}</td>
+        <td class="num">${d.f>0?pct(d.h,2):''}</td>
+        <td class="num${d.i>0?' filled-cell':''}">${d.i>0?d.i.toFixed(2):''}</td>
+        <td class="num">${d.i>0?pct(d.j):''}</td>
+        <td class="num">${d.i>0?pct(d.k,2):''}</td>
+        <td class="impact-total">${pct(d.l,2)}</td>
+      </tr>`).join('');
+  }
+
+  document.getElementById('foqaFC').textContent = data.sumC.toFixed(2);
+  document.getElementById('foqaFF').textContent = data.sumF.toFixed(2);
+  document.getElementById('foqaFI').textContent = data.sumI.toFixed(2);
+  document.getElementById('foqaFE').textContent = pct(data.fE,2);
+  document.getElementById('foqaFH').textContent = pct(data.fH,2);
+  document.getElementById('foqaFK').textContent = pct(data.fK,2);
+  document.getElementById('foqaFL').textContent = pct(data.fL,2);
+
+  const safeDiv = (a,b)=> b ? a/b : 0;
+  Object.keys(data.summarySum).forEach(key=>{
+    const valEl = document.getElementById(`foqa-${key}`);
+    const pctEl = document.getElementById(`foqa-pct-${key}`);
+    if(valEl) valEl.textContent = data.summarySum[key].toFixed(2);
+    if(pctEl) pctEl.textContent = pct(safeDiv(data.summarySum[key], data.grand));
+  });
+
+  document.getElementById('foqaGrandTotal').textContent = data.grand.toFixed(2);
+  document.getElementById('foqaSellable').textContent = pct(data.sellablePct);
+  document.getElementById('foqaCGrade').textContent = pct(data.cPct);
+  document.getElementById('foqaDamage').textContent = pct(data.damPct);
 }
 
 function exportAnalysisCSV(){
@@ -1837,7 +2045,8 @@ const AI_QUESTION_TITLES = {
   'last10': "Last 10 Days' Quality Issues",
   'recurring-damage': "Recurring Problem Defects — Damage",
   'recurring-cgrade': "Recurring Problem Defects — C Grade",
-  'variation': "Defect Variation — Last 10 Days"
+  'variation': "Defect Variation — Last 10 Days",
+  'squaring': "Squaring Machine Defects — Last 10 Days"
 };
 
 async function runAIQuestion(q){
@@ -1863,6 +2072,8 @@ async function runAIQuestion(q){
     renderAIRecurringResult('c');
   } else if(q === 'variation'){
     renderAIVariationSetup();
+  } else if(q === 'squaring'){
+    renderAISquaringResult();
   }
 }
 
@@ -2081,6 +2292,71 @@ function renderAIVariationChart(itemName){
   aiVariationChart = new Chart(ctx, {
     type:'line',
     data:{ labels: days.map(formatDateDMY), datasets },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ display:true, position:'bottom' }, datalabels:{ display:false },
+        tooltip:{ callbacks:{ label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y}%` } } },
+      scales:{ y:{ beginAtZero:true, title:{ display:true, text:'% of Production' }, ticks:{ callback:v=>v+'%' } } } }
+  });
+}
+
+/* ---- Q7: Squaring Machine defects — combined C Grade + Damage line ---- */
+const SQUARING_DEFECT_NAMES = ['BROKEN COR / EDGES [SQ - MC]', 'EDGE CHIP', 'UNEVENESS SQUARING'];
+const SQUARING_SUBCATEGORY_KEYS = ['cDiag', 'cSize', 'damLiner']; // Diagonal (C), Size Out (C), Liner (Damage)
+
+function renderAISquaringResult(){
+  const body = document.getElementById('aiResultBody');
+  const days = [];
+  for(let i=9; i>=0; i--) days.push(isoDaysAgo(i));
+  const from = days[0], to = days[days.length-1];
+
+  const records = getRecordsInDateRange(from, to);
+  const safeDiv = (a,b)=> b ? a/b : 0;
+
+  if(!records.length){
+    body.innerHTML = `<div class="ai-summary-line">No saved records found for the last 10 days (${formatDateDMY(from)} – ${formatDateDMY(to)}) to analyze Squaring Machine defects.</div>`;
+    return;
+  }
+
+  const series = days.map(day=>{
+    const dayRecords = records.filter(r=>r.date===day);
+    let dayGrand = 0, squaringSQM = 0;
+
+    dayRecords.forEach(rec=>{
+      const s = rec.summary || {};
+      dayGrand += Object.values(s).reduce((a,v)=>a+(+v||0), 0);
+      SQUARING_SUBCATEGORY_KEYS.forEach(k=> squaringSQM += (+s[k]||0));
+      (rec.defects||[]).forEach(d=>{
+        if(SQUARING_DEFECT_NAMES.includes(d.name)){
+          squaringSQM += (+d.sqmC||0) + (+d.sqmDam||0);
+        }
+      });
+    });
+
+    return +(safeDiv(squaringSQM, dayGrand)*100).toFixed(2);
+  });
+
+  const hasAnyData = series.some(v=>v>0);
+  const latest = series[series.length-1];
+  const peak = Math.max(...series);
+  const peakDay = days[series.indexOf(peak)];
+
+  const summaryLine = hasAnyData
+    ? `Covering ${formatDateDMY(from)} – ${formatDateDMY(to)}: Squaring Machine defects (Diagonal, Size Out, Liner, Broken Cor/Edges [SQ-MC], Edge Chip, Uneveness Squaring — combined C Grade + Damage share of production) peaked at <b>${pct(peak/100)}</b> on ${formatDateDMY(peakDay)}, and stood at <b>${pct(latest/100)}</b> on the most recent day (${formatDateDMY(to)}).`
+    : `No Squaring Machine defects (Diagonal, Size Out, Liner, Broken Cor/Edges [SQ-MC], Edge Chip, Uneveness Squaring) were recorded in the last 10 days (${formatDateDMY(from)} – ${formatDateDMY(to)}).`;
+
+  body.innerHTML = `
+    <div class="ai-summary-line">${summaryLine}</div>
+    <div class="chart-box" style="height:340px;"><canvas id="aiSquaringCanvas"></canvas></div>`;
+
+  const ctx = document.getElementById('aiSquaringCanvas');
+  new Chart(ctx, {
+    type:'line',
+    data:{ labels: days.map(formatDateDMY), datasets:[{
+      label:'Squaring Machine Defects % (C Grade + Damage combined)',
+      data: series,
+      borderColor:'#C2410C', backgroundColor:'rgba(194,65,12,0.12)',
+      fill:true, tension:0.25, pointRadius:4, pointBackgroundColor:'#C2410C'
+    }]},
     options:{ responsive:true, maintainAspectRatio:false,
       plugins:{ legend:{ display:true, position:'bottom' }, datalabels:{ display:false },
         tooltip:{ callbacks:{ label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y}%` } } },
