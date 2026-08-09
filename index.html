@@ -201,6 +201,8 @@
   .chart-grid-equal{ grid-template-columns:1fr 1fr; }
   .chart-box{ position:relative; height:340px; }
   .chart-box-tall{ height:420px; }
+  .chart-scroll-x{ overflow-x:auto; overflow-y:hidden; }
+  .chart-scroll-x .chart-box{ min-width:100%; }
 
   /* ---------- Buttons ---------- */
   .actions{ display:flex; gap:10px; justify-content:flex-end; margin-top:4px; flex-wrap:wrap; }
@@ -607,7 +609,7 @@
     </div>
     <div class="card">
       <h2><span class="n">7</span> Defect Pareto — C Grade % &amp; Damage % by Contributor</h2>
-      <div class="chart-box chart-box-tall"><canvas id="paretoChart"></canvas></div>
+      <div class="chart-scroll-x"><div class="chart-box chart-box-tall" id="paretoChartBox"><canvas id="paretoChart"></canvas></div></div>
     </div>
     <div class="card">
       <h2><span class="n">8</span> C Grade &amp; Damage Defect Analysis <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--ink-soft)">— each contributor's share of total C Grade / total Damage</span></h2>
@@ -851,7 +853,7 @@ const DEFECTS = [
 "COLOUR VARIATION","BLACK CORE / VISIBLE SQUARE","BELL, WELA & VIBRATION LINES",
 "BLOW OUT (Blistering)","GLAZE PARTICLES & Drops","TEAR DEFECT/GLAZE EDGE DAMAGE",
 "OVER / LOW CHAMFERING","EDGE CHIP","ROLLER EFFECTS","UNEVENESS POLISH (Dull)",
-"UNEVENESS POLISH ON EDGES","OVER POLISH","WAX / COATING PROBLEM"
+"UNEVENESS POLISH ON EDGES","OVER POLISH","WAX / COATING PROBLEM","ROUGHNESS/TEXTURE PROBLEM"
 ];
 
 // Production type codes (format: F.. ... ends in a number)
@@ -1383,7 +1385,10 @@ function renderCharts(data){
     return;
   }
 
-  const top = [...paretoItems].sort((a,b)=>(b.cPct+b.damPct)-(a.cPct+a.damPct)).slice(0,15);
+  const top = [...paretoItems].filter(x=>x.cPct>0 || x.damPct>0).sort((a,b)=>(b.cPct+b.damPct)-(a.cPct+a.damPct));
+
+  const paretoBox = document.getElementById('paretoChartBox');
+  paretoBox.style.width = Math.max(paretoBox.parentElement.clientWidth, top.length*55) + 'px';
 
   const ctx1 = document.getElementById('paretoChart');
   if(paretoChart) paretoChart.destroy();
