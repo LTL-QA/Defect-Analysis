@@ -165,6 +165,8 @@
     font-family:var(--font-mono); text-align:right; font-size:12.5px;
   }
   .sumrow input:focus{ outline:none; border-color:var(--teal); }
+  .sumrow input[readonly]{ background:#eef2f2; color:var(--ink-soft); font-weight:700; cursor:not-allowed; }
+  .sumrow input.negative{ color:var(--terracotta); background:#fdeceb; border-color:var(--terracotta); }
   .sumval{
     width:78px; padding:5px 7px; border:1px solid transparent; border-radius:6px;
     font-family:var(--font-mono); text-align:right; font-size:12.5px; color:var(--ink);
@@ -506,33 +508,37 @@
     </div>
 
     <div class="card">
-      <h2><span class="n">3</span> Grade Summary (SQM)</h2>
+      <h2><span class="n">3</span> Grade Summary (PCS) <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--ink-soft)">— enter Total Quantity and defect counts; 2nd Grade / C Grade / Damages calculate automatically</span></h2>
       <div class="sumgrid">
         <div class="sumgroup g-1">
           <h3 style="color:var(--good)">Sellable</h3>
-          <div class="sumrow"><label>1st Grade</label><input type="number" step="0.01" class="sqm" data-key="g1"><span class="pctbadge" id="pct-g1">0.0%</span></div>
-          <div class="sumrow"><label>2nd Grade</label><input type="number" step="0.01" class="sqm" data-key="g2"><span class="pctbadge" id="pct-g2">0.0%</span></div>
-          <div class="sumrow"><label>Diagonal (2nd)</label><input type="number" step="0.01" class="sqm" data-key="g2diag"><span class="pctbadge" id="pct-g2diag">0.0%</span></div>
-          <div class="sumrow"><label>Warpage / Centre Curv. (2nd)</label><input type="number" step="0.01" class="sqm" data-key="g2warp"><span class="pctbadge" id="pct-g2warp">0.0%</span></div>
+          <div class="sumrow"><label>1st Grade</label><input type="number" step="1" min="0" class="pcsval" data-key="g1"><span class="pctbadge" id="pct-g1">0.0%</span></div>
+          <div class="sumrow"><label>2nd Grade</label><input type="number" step="1" class="pcsval" id="calc-g2" readonly tabindex="-1"><span class="pctbadge" id="pct-g2">0.0%</span></div>
+          <div class="sumrow"><label>Diagonal (2nd)</label><input type="number" step="1" min="0" class="pcsval" data-key="g2diag"><span class="pctbadge" id="pct-g2diag">0.0%</span></div>
+          <div class="sumrow"><label>Warpage / Centre Curv. (2nd)</label><input type="number" step="1" min="0" class="pcsval" data-key="g2warp"><span class="pctbadge" id="pct-g2warp">0.0%</span></div>
+          <div class="sumrow"><label>Total Quantity</label><input type="number" step="1" min="0" class="pcsval" data-subtotal="sellable"><span class="pctbadge"></span></div>
         </div>
         <div class="sumgroup g-c">
           <h3 style="color:var(--amber)">"C" Grade</h3>
-          <div class="sumrow"><label>C Grade</label><input type="number" step="0.01" class="sqm" data-key="cGrade"><span class="pctbadge" id="pct-cGrade">0.0%</span></div>
-          <div class="sumrow"><label>Size Out</label><input type="number" step="0.01" class="sqm" data-key="cSize"><span class="pctbadge" id="pct-cSize">0.0%</span></div>
-          <div class="sumrow"><label>Diagonal (C)</label><input type="number" step="0.01" class="sqm" data-key="cDiag"><span class="pctbadge" id="pct-cDiag">0.0%</span></div>
-          <div class="sumrow"><label>Warpage / Centre Curv. (C)</label><input type="number" step="0.01" class="sqm" data-key="cWarp"><span class="pctbadge" id="pct-cWarp">0.0%</span></div>
+          <div class="sumrow"><label>C Grade</label><input type="number" step="1" class="pcsval" id="calc-cGrade" readonly tabindex="-1"><span class="pctbadge" id="pct-cGrade">0.0%</span></div>
+          <div class="sumrow"><label>Size Out</label><input type="number" step="1" min="0" class="pcsval" data-key="cSize"><span class="pctbadge" id="pct-cSize">0.0%</span></div>
+          <div class="sumrow"><label>Diagonal (C)</label><input type="number" step="1" min="0" class="pcsval" data-key="cDiag"><span class="pctbadge" id="pct-cDiag">0.0%</span></div>
+          <div class="sumrow"><label>Warpage / Centre Curv. (C)</label><input type="number" step="1" min="0" class="pcsval" data-key="cWarp"><span class="pctbadge" id="pct-cWarp">0.0%</span></div>
+          <div class="sumrow"><label>Total Quantity</label><input type="number" step="1" min="0" class="pcsval" data-subtotal="cGrade"><span class="pctbadge"></span></div>
         </div>
         <div class="sumgroup g-d">
           <h3 style="color:var(--terracotta)">Damages</h3>
-          <div class="sumrow"><label>Damages</label><input type="number" step="0.01" class="sqm" data-key="dam"><span class="pctbadge" id="pct-dam">0.0%</span></div>
-          <div class="sumrow"><label>Sorting Damages</label><input type="number" step="0.01" class="sqm" data-key="damSort"><span class="pctbadge" id="pct-damSort">0.0%</span></div>
-          <div class="sumrow"><label>Before Polishing & SQ.</label><input type="number" step="0.01" class="sqm" data-key="damPolish"><span class="pctbadge" id="pct-damPolish">0.0%</span></div>
-          <div class="sumrow"><label>Liner</label><input type="number" step="0.01" class="sqm" data-key="damLiner"><span class="pctbadge" id="pct-damLiner">0.0%</span></div>
-          <div class="sumrow"><label>Planner</label><input type="number" step="0.01" class="sqm" data-key="damPlanner"><span class="pctbadge" id="pct-damPlanner">0.0%</span></div>
-          <div class="sumrow"><label>Kiln Damages</label><input type="number" step="0.01" class="sqm" data-key="damKiln"><span class="pctbadge" id="pct-damKiln">0.0%</span></div>
+          <div class="sumrow"><label>Damages</label><input type="number" step="1" class="pcsval" id="calc-dam" readonly tabindex="-1"><span class="pctbadge" id="pct-dam">0.0%</span></div>
+          <div class="sumrow"><label>Sorting Damages</label><input type="number" step="1" min="0" class="pcsval" data-key="damSort"><span class="pctbadge" id="pct-damSort">0.0%</span></div>
+          <div class="sumrow"><label>Before Polishing & SQ.</label><input type="number" step="1" min="0" class="pcsval" data-key="damPolish"><span class="pctbadge" id="pct-damPolish">0.0%</span></div>
+          <div class="sumrow"><label>Liner</label><input type="number" step="1" min="0" class="pcsval" data-key="damLiner"><span class="pctbadge" id="pct-damLiner">0.0%</span></div>
+          <div class="sumrow"><label>Planner</label><input type="number" step="1" min="0" class="pcsval" data-key="damPlanner"><span class="pctbadge" id="pct-damPlanner">0.0%</span></div>
+          <div class="sumrow"><label>Kiln Damages</label><input type="number" step="1" min="0" class="pcsval" data-key="damKiln"><span class="pctbadge" id="pct-damKiln">0.0%</span></div>
+          <div class="sumrow"><label>Total Quantity</label><input type="number" step="1" min="0" class="pcsval" data-subtotal="damages"><span class="pctbadge"></span></div>
         </div>
       </div>
       <div class="sumtotal"><span>Grand Total SQM</span><span id="grandTotal">0.00</span></div>
+      <div id="noSizeHint" style="display:none; font-size:12px; color:var(--terracotta); margin-top:6px;">⚠ Enter a Type in Section 1 first — PCS can't convert to SQM until a Size is known.</div>
       <div class="kpis kpis-3" style="margin-top:14px; margin-bottom:0;">
         <div class="kpi good"><div class="label">Saleable Yield %</div><div class="value" id="entrySellable">0.0%</div></div>
         <div class="kpi c"><div class="label">C Grade %</div><div class="value" id="entryCGrade">0.0%</div></div>
@@ -867,9 +873,20 @@ if(typeof ChartDataLabels !== 'undefined'){
   Chart.defaults.set('plugins.datalabels', { display:false });
 }
 
-let sqmPerPc = 0.16; // 400x400mm default
+let sqmPerPc = 0; // 0 until a Type is entered and a Size is derived — no size assumed by default
 const rows = DEFECTS.map(()=>({ c:0, f:0, i:0 })); // pcs entered per defect (2nd, C, Damage)
-const summary = { g1:0,g2:0,g2diag:0,g2warp:0, cGrade:0,cSize:0,cDiag:0,cWarp:0, dam:0,damSort:0,damPolish:0,damLiner:0,damPlanner:0,damKiln:0 };
+const summary = { g1:0,g2:0,g2diag:0,g2warp:0, cGrade:0,cSize:0,cDiag:0,cWarp:0, dam:0,damSort:0,damPolish:0,damLiner:0,damPlanner:0,damKiln:0 }; // SQM, derived from summaryPcs below
+
+// Section 3 is entered in PCS. 2nd Grade / C Grade / Damages are NOT
+// entered directly — they're calculated as: subtotal Total Quantity minus
+// the other defect counts in that subsection. summaryPcs holds the
+// manually-entered pcs values; subTotalsPcs holds each subsection's Total
+// Quantity. recalcGradeSummaryFromPcs() derives the calculated fields and
+// converts everything to SQM (via sqmPerPc) into the `summary` object above,
+// which is what every downstream calculation (recalcAll, gatherRecord,
+// Dashboard/Analysis aggregation) already expects.
+const summaryPcs = { g1:0, g2diag:0, g2warp:0, cSize:0, cDiag:0, cWarp:0, damSort:0, damPolish:0, damLiner:0, damPlanner:0, damKiln:0 };
+const subTotalsPcs = { sellable:0, cGrade:0, damages:0 };
 
 let paretoChart, cGradePieChart, damagePieChart;
 
@@ -884,7 +901,7 @@ function init(){
   document.getElementById('jLot').value = `${yy}/${mm}`;
   buildDefectRows();
   wireEvents();
-  recalcAll();
+  recalcGradeSummaryFromPcs();
   tickClock();
   setInterval(tickClock, 1000*30);
   syncMasterTypeList();
@@ -1002,11 +1019,13 @@ function wireEvents(){
 
   wireDefectSearch();
 
-  document.querySelectorAll('.sqm').forEach(inp=>{
+  document.querySelectorAll('.pcsval[data-key], .pcsval[data-subtotal]').forEach(inp=>{
     inp.addEventListener('input', ()=>{
-      summary[inp.dataset.key] = +inp.value || 0;
+      const val = +inp.value || 0;
+      if(inp.dataset.key) summaryPcs[inp.dataset.key] = val;
+      else if(inp.dataset.subtotal) subTotalsPcs[inp.dataset.subtotal] = val;
       document.getElementById('btnSave').disabled = false;
-      recalcAll();
+      recalcGradeSummaryFromPcs();
     });
   });
 
@@ -1275,15 +1294,15 @@ function updateDerivedFields(){
   document.getElementById('jSize').value = size;
   document.getElementById('jTexture').value = deriveTexture(t);
   sqmPerPc = sizeToSqm(size);
-  recalcAll();
+  recalcGradeSummaryFromPcs(); // re-derive SQM for Section 3 (calls recalcAll internally)
 }
 
 function sizeToSqm(str){
-  if(!str) return 0.16;
-  const clean = str.replace(/[×xX]/,'x').replace(/[A-Za-z—]/g,'').trim();
-  const m = /^(\d+(\.\d+)?)\s*x\s*(\d+(\.\d+)?)$/i.exec(clean);
-  if(!m) return 0.16;
-  return (parseFloat(m[1])/1000) * (parseFloat(m[3])/1000);
+  if(!str) return 0; // no Type entered yet — don't assume a size, so PCS→SQM stays 0
+  const s = str.trim();
+  const m = /^(\d+(?:\.\d+)?)\s*[×xX]\s*(\d+(?:\.\d+)?)/.exec(s);
+  if(!m) return 0; // Type doesn't map to a known size (e.g. "—") — same, no assumption
+  return (parseFloat(m[1])/1000) * (parseFloat(m[2])/1000);
 }
 
 /* =====================================================================
@@ -1293,6 +1312,50 @@ function sizeToSqm(str){
    G,H / J,K follow the same pattern for C Grade / Damage
    L = E + H + K                (total combined impact %)
 ===================================================================== */
+/* =====================================================================
+   SECTION 3 — Grade Summary is entered in PCS. 2nd Grade / C Grade /
+   Damages are calculated (not typed): subsection Total Quantity minus
+   the other pcs entries in that subsection. Converts everything to SQM
+   (via sqmPerPc) into `summary`, which every other calculation reads.
+===================================================================== */
+function recalcGradeSummaryFromPcs(){
+  const hint = document.getElementById('noSizeHint');
+  if(hint) hint.style.display = sqmPerPc > 0 ? 'none' : 'block';
+
+  const g2Pcs = subTotalsPcs.sellable - summaryPcs.g1 - summaryPcs.g2diag - summaryPcs.g2warp;
+  const cGradePcs = subTotalsPcs.cGrade - summaryPcs.cSize - summaryPcs.cDiag - summaryPcs.cWarp;
+  const damPcs = subTotalsPcs.damages - summaryPcs.damSort - summaryPcs.damPolish - summaryPcs.damLiner - summaryPcs.damPlanner - summaryPcs.damKiln;
+
+  summary.g1 = summaryPcs.g1 * sqmPerPc;
+  summary.g2 = g2Pcs * sqmPerPc;
+  summary.g2diag = summaryPcs.g2diag * sqmPerPc;
+  summary.g2warp = summaryPcs.g2warp * sqmPerPc;
+  summary.cGrade = cGradePcs * sqmPerPc;
+  summary.cSize = summaryPcs.cSize * sqmPerPc;
+  summary.cDiag = summaryPcs.cDiag * sqmPerPc;
+  summary.cWarp = summaryPcs.cWarp * sqmPerPc;
+  summary.dam = damPcs * sqmPerPc;
+  summary.damSort = summaryPcs.damSort * sqmPerPc;
+  summary.damPolish = summaryPcs.damPolish * sqmPerPc;
+  summary.damLiner = summaryPcs.damLiner * sqmPerPc;
+  summary.damPlanner = summaryPcs.damPlanner * sqmPerPc;
+  summary.damKiln = summaryPcs.damKiln * sqmPerPc;
+
+  // Reflect the calculated pcs values in the disabled fields, flagging
+  // negative results (Total Quantity entered too low) in red so the
+  // mistake is obvious rather than silently clamped to zero.
+  const setCalc = (id, val) => {
+    const el = document.getElementById(id);
+    el.value = val;
+    el.classList.toggle('negative', val < 0);
+  };
+  setCalc('calc-g2', g2Pcs);
+  setCalc('calc-cGrade', cGradePcs);
+  setCalc('calc-dam', damPcs);
+
+  recalcAll();
+}
+
 function recalcAll(){
   const cVals = rows.map(r=>r.c*sqmPerPc);
   const fVals = rows.map(r=>r.f*sqmPerPc);
@@ -1460,14 +1523,16 @@ function renderCharts(data){
    ACTIONS: clear / export / save / load
 ===================================================================== */
 function clearForm(){
-  if(!confirm('Clear all entered quantities and SQM values?')) return;
+  if(!confirm('Clear all entered quantities and values?')) return;
   rows.forEach(r=>{ r.c=0; r.f=0; r.i=0; });
   activeDefects = [];
   buildDefectRows();
-  Object.keys(summary).forEach(k=>{ summary[k]=0; const b=document.getElementById(`pct-${k}`); if(b) b.textContent='0.0%'; });
-  document.querySelectorAll('.sqm').forEach(i=>i.value='');
+  Object.keys(summaryPcs).forEach(k=> summaryPcs[k]=0);
+  Object.keys(subTotalsPcs).forEach(k=> subTotalsPcs[k]=0);
+  Object.keys(summary).forEach(k=>{ const b=document.getElementById(`pct-${k}`); if(b) b.textContent='0.0%'; });
+  document.querySelectorAll('.pcsval[data-key], .pcsval[data-subtotal]').forEach(i=>i.value='');
   document.getElementById('btnSave').disabled = false;
-  recalcAll();
+  recalcGradeSummaryFromPcs();
 }
 
 function generateRecordId(){
@@ -1491,6 +1556,7 @@ function gatherRecord(){
     cGradePct: +(cPct*100).toFixed(2),
     damagePct: +(damPct*100).toFixed(2),
     summary: { ...summary },
+    summaryPcs: { ...summaryPcs, totalSellablePcs: subTotalsPcs.sellable, totalCGradePcs: subTotalsPcs.cGrade, totalDamagesPcs: subTotalsPcs.damages },
     defects: DEFECTS.map((name, idx)=>({
       name,
       qty2nd: rows[idx].c, qtyC: rows[idx].f, qtyDam: rows[idx].i,
