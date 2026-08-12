@@ -174,6 +174,15 @@
 
   /* ---------- Section 5 format toggle ---------- */
   .format-toggle{ display:flex; gap:8px; margin-bottom:16px; }
+
+  /* ---------- Sorting Line button selector (Section 1) ---------- */
+  .sl-button-group{ display:flex; gap:6px; height:38px; }
+  .sl-btn{
+    flex:1; border-radius:7px; border:1px solid var(--panel-line); background:#fbfcfc;
+    font-family:var(--font-mono); font-weight:600; font-size:12.5px; color:var(--ink-soft); cursor:pointer;
+  }
+  .sl-btn:hover{ border-color:var(--teal); color:var(--teal-deep); }
+  .sl-btn.active{ background:var(--teal); border-color:var(--teal); color:#fff; }
   .format-toggle-btn{
     padding:8px 16px; border-radius:8px; border:1px solid var(--panel-line); background:#fff;
     font-family:var(--font-ui); font-weight:600; font-size:12.5px; color:var(--ink-soft); cursor:pointer;
@@ -440,6 +449,15 @@
           <select id="jShift"><option value="M">M — Morning</option><option value="E">E — Evening</option><option value="N">N — Night</option></select>
         </div>
         <div class="field">
+          <label>Sorting Line</label>
+          <div class="sl-button-group" id="jSortingLineGroup">
+            <button type="button" class="sl-btn" data-sl="SL05">SL05</button>
+            <button type="button" class="sl-btn" data-sl="SL06">SL06</button>
+            <button type="button" class="sl-btn" data-sl="SL07">SL07</button>
+          </div>
+          <input type="hidden" id="jSortingLine" value="">
+        </div>
+        <div class="field">
           <label>Texture <span style="font-weight:400;text-transform:none;">(auto)</span></label>
           <input type="text" id="jTexture" readonly>
         </div>
@@ -599,6 +617,10 @@
           <option value="">All Kilns</option>
           <option>Kiln-03</option><option>Kiln-04</option><option>Kiln-05</option>
         </select></div>
+        <div class="field"><label>Sorting Line</label><select id="fSortingLine">
+          <option value="">All Sorting Lines</option>
+          <option>SL05</option><option>SL06</option><option>SL07</option>
+        </select></div>
       </div>
       <div class="actions filter-actions" style="justify-content:flex-start; margin-top:12px;">
         <span id="filterStatus" style="font-size:12px; color:var(--ink-soft); align-self:center;"></span>
@@ -670,6 +692,10 @@
         <div class="field"><label>Kiln</label><select id="aKiln">
           <option value="">All Kilns</option>
           <option>Kiln-03</option><option>Kiln-04</option><option>Kiln-05</option>
+        </select></div>
+        <div class="field"><label>Sorting Line</label><select id="aSortingLine">
+          <option value="">All Sorting Lines</option>
+          <option>SL05</option><option>SL06</option><option>SL07</option>
         </select></div>
       </div>
       <div class="actions filter-actions" style="justify-content:flex-start; margin-top:12px;">
@@ -998,6 +1024,15 @@ function wireEvents(){
 
   document.getElementById('jType').addEventListener('blur', checkForNewMasterType);
 
+  document.querySelectorAll('#jSortingLineGroup .sl-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('#jSortingLineGroup .sl-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('jSortingLine').value = btn.dataset.sl;
+      document.getElementById('btnSave').disabled = false;
+    });
+  });
+
   document.getElementById('defectBody').addEventListener('input', e=>{
     if(!e.target.classList.contains('qty')) return;
     const idx = +e.target.dataset.idx, col = e.target.dataset.col;
@@ -1034,7 +1069,7 @@ function wireEvents(){
   document.getElementById('btnSave').addEventListener('click', saveRecord);
   document.getElementById('btnRefresh').addEventListener('click', loadRecords);
   document.getElementById('btnApplyFilters').addEventListener('click', applyFilters);
-  ['fDateFrom','fDateTo','fTexture','fSize','fShift','fKiln'].forEach(id=>{
+  ['fDateFrom','fDateTo','fTexture','fSize','fShift','fKiln','fSortingLine'].forEach(id=>{
     document.getElementById(id).addEventListener('change', applyFilters);
   });
   document.getElementById('fGL').addEventListener('change', ()=>{
@@ -1044,12 +1079,12 @@ function wireEvents(){
   document.getElementById('fLot').addEventListener('input', applyFilters);
   document.getElementById('btnResetFilters').addEventListener('click', ()=>{
     ['fDateFrom','fDateTo','fType','fLot'].forEach(id=>document.getElementById(id).value='');
-    ['fTexture','fSize','fGL','fShift','fKiln'].forEach(id=>document.getElementById(id).value='');
+    ['fTexture','fSize','fGL','fShift','fKiln','fSortingLine'].forEach(id=>document.getElementById(id).value='');
     applyFilters();
   });
 
   document.getElementById('btnApplyAnalysisFilters').addEventListener('click', applyAnalysisFilters);
-  ['aDateFrom','aDateTo','aTexture','aSize','aShift','aKiln'].forEach(id=>{
+  ['aDateFrom','aDateTo','aTexture','aSize','aShift','aKiln','aSortingLine'].forEach(id=>{
     document.getElementById(id).addEventListener('change', applyAnalysisFilters);
   });
   document.getElementById('aGL').addEventListener('change', ()=>{
@@ -1059,7 +1094,7 @@ function wireEvents(){
   document.getElementById('aLot').addEventListener('input', applyAnalysisFilters);
   document.getElementById('btnResetAnalysisFilters').addEventListener('click', ()=>{
     ['aDateFrom','aDateTo','aType','aLot'].forEach(id=>document.getElementById(id).value='');
-    ['aTexture','aSize','aGL','aShift','aKiln'].forEach(id=>document.getElementById(id).value='');
+    ['aTexture','aSize','aGL','aShift','aKiln','aSortingLine'].forEach(id=>document.getElementById(id).value='');
     applyAnalysisFilters();
   });
   document.getElementById('btnExportAnalysisCSV').addEventListener('click', exportAnalysisCSV);
@@ -1551,6 +1586,7 @@ function gatherRecord(){
     kiln: document.getElementById('jKiln').value,
     lot: document.getElementById('jLot').value,
     shift: document.getElementById('jShift').value,
+    sortingLine: document.getElementById('jSortingLine').value,
     grandTotalSqm: +grand.toFixed(3),
     sellablePct: +(sellablePct*100).toFixed(2),
     cGradePct: +(cPct*100).toFixed(2),
@@ -1570,8 +1606,8 @@ function gatherRecord(){
 function exportCSV(){
   const rec = gatherRecord();
   let csvRows = [
-    ['Date','Type','Texture','Size','GL','Kiln','Lot','Shift','Grand Total SQM','Sellable %','C Grade %','Damage %'],
-    [rec.date, rec.type, rec.texture, rec.size, rec.gl, rec.kiln, rec.lot, rec.shift, rec.grandTotalSqm, rec.sellablePct, rec.cGradePct, rec.damagePct],
+    ['Date','Type','Texture','Size','GL','Kiln','Lot','Shift','Sorting Line','Grand Total SQM','Sellable %','C Grade %','Damage %'],
+    [rec.date, rec.type, rec.texture, rec.size, rec.gl, rec.kiln, rec.lot, rec.shift, rec.sortingLine, rec.grandTotalSqm, rec.sellablePct, rec.cGradePct, rec.damagePct],
     [],
     ['Defect No','Description','2nd Grade Qty (pcs)','C Grade Qty (pcs)','Damage Qty (pcs)']
   ];
@@ -1713,7 +1749,8 @@ function getAnalysisFilterValues(){
     gl: document.getElementById('aGL').value,
     lot: document.getElementById('aLot').value.trim(),
     shift: document.getElementById('aShift').value,
-    kiln: document.getElementById('aKiln').value
+    kiln: document.getElementById('aKiln').value,
+    sortingLine: document.getElementById('aSortingLine').value
   };
 }
 
@@ -1740,7 +1777,8 @@ function buildAnalysisFilterMeta(f){
     type: f.type || 'All Types',
     texture: f.texture || 'All Textures',
     size: f.size || 'All Sizes',
-    lot: f.lot || 'All Lots'
+    lot: f.lot || 'All Lots',
+    sortingLine: f.sortingLine || 'All Sorting Lines'
   };
 }
 
@@ -1757,6 +1795,7 @@ function applyAnalysisFilters(){
     if(f.lot && r.lot !== f.lot) return false;
     if(f.shift && r.shift !== f.shift) return false;
     if(f.kiln && r.kiln !== f.kiln) return false;
+    if(f.sortingLine && r.sortingLine !== f.sortingLine) return false;
     return true;
   });
   document.getElementById('analysisFilterStatus').textContent = `${filtered.length} of ${list.length} record(s) match.`;
@@ -1799,6 +1838,7 @@ function renderAnalysisSummary(agg, meta){
   leftHtml += infoRow('Texture', meta.texture);
   leftHtml += infoRow('Size', meta.size);
   leftHtml += infoRow('Lot', meta.lot);
+  leftHtml += infoRow('Sorting Line', meta.sortingLine);
   leftHtml += infoRow('Production (SQM)', agg.grand.toFixed(2));
   leftHtml += spacer;
 
@@ -1986,7 +2026,8 @@ function getFilterValues(){
     gl: document.getElementById('fGL').value,
     lot: document.getElementById('fLot').value.trim(),
     shift: document.getElementById('fShift').value,
-    kiln: document.getElementById('fKiln').value
+    kiln: document.getElementById('fKiln').value,
+    sortingLine: document.getElementById('fSortingLine').value
   };
 }
 
@@ -2003,6 +2044,7 @@ function applyFilters(){
     if(f.lot && r.lot !== f.lot) return false;
     if(f.shift && r.shift !== f.shift) return false;
     if(f.kiln && r.kiln !== f.kiln) return false;
+    if(f.sortingLine && r.sortingLine !== f.sortingLine) return false;
     return true;
   });
   document.getElementById('filterStatus').textContent = `${filtered.length} of ${list.length} record(s) match.`;
@@ -2145,7 +2187,7 @@ async function runAIQuestion(q){
   } else if(q === 'variation'){
     renderAIVariationSetup();
   } else if(q === 'squaring'){
-    renderAISquaringResult();
+    renderAISquaringSetup();
   }
 }
 
@@ -2297,6 +2339,54 @@ function renderAIVariationSetup(){
   const body = document.getElementById('aiResultBody');
   const options = AI_VARIATION_ITEMS.map(item=>`<option value="${item.name}">${item.name}</option>`).join('');
   body.innerHTML = `
+    <div class="jobgrid filter-grid" style="margin-bottom:16px;">
+      <div class="field" style="position:relative;">
+        <label>Type</label>
+        <input type="text" id="aiVarType" autocomplete="off" placeholder="Any — start typing">
+        <div id="aiVarTypeSuggest" class="suggest-list"></div>
+      </div>
+      <div class="field"><label>Texture</label><select id="aiVarTexture">
+        <option value="">All Textures</option>
+        <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>
+        <option>6</option><option>7</option><option>8</option><option>9</option>
+        <option>A</option><option>B</option><option>C</option><option>D</option><option>E</option>
+        <option>F</option><option>G</option><option>H</option><option>J</option><option>K</option><option>L</option>
+      </select></div>
+      <div class="field"><label>Size</label><select id="aiVarSize">
+        <option value="">All Sizes</option>
+        <option value="300×300">300×300</option>
+        <option value="300×300P">300×300P</option>
+        <option value="400×400">400×400</option>
+        <option value="500×500">500×500</option>
+        <option value="600×300">600×300</option>
+        <option value="600×300P">600×300P</option>
+        <option value="600×600">600×600</option>
+        <option value="600×600P">600×600P</option>
+        <option value="600×1200">600×1200</option>
+        <option value="600×1200P">600×1200P</option>
+        <option value="800×800">800×800</option>
+        <option value="800×800P">800×800P</option>
+        <option value="800×1200">800×1200</option>
+        <option value="800×1200P">800×1200P</option>
+      </select></div>
+      <div class="field"><label>Glazing Line</label><select id="aiVarGL">
+        <option value="">All Glazing Lines</option>
+        <option>GL-01</option><option>GL-02</option><option>GL-05</option><option>GL-06</option>
+      </select></div>
+      <div class="field"><label>Lot (YY/MM)</label><input type="text" id="aiVarLot" placeholder="Any"></div>
+      <div class="field"><label>Shift</label><select id="aiVarShift">
+        <option value="">All Shifts</option>
+        <option value="M">M — Morning</option><option value="E">E — Evening</option><option value="N">N — Night</option>
+      </select></div>
+      <div class="field"><label>Kiln</label><select id="aiVarKiln">
+        <option value="">All Kilns</option>
+        <option>Kiln-03</option><option>Kiln-04</option><option>Kiln-05</option>
+      </select></div>
+      <div class="field"><label>Sorting Line</label><select id="aiVarSortingLine">
+        <option value="">All Sorting Lines</option>
+        <option>SL05</option><option>SL06</option><option>SL07</option>
+      </select></div>
+    </div>
     <div class="ai-variation-controls">
       <div class="field">
         <label>Choose a defect</label>
@@ -2306,11 +2396,26 @@ function renderAIVariationSetup(){
     </div>
     <div id="aiVariationChartWrap"></div>`;
 
+  setupTypeAutocomplete('aiVarType', 'aiVarTypeSuggest', ()=>{});
+
   document.getElementById('aiVariationShow').addEventListener('click', ()=>{
     const name = document.getElementById('aiVariationDefect').value;
     if(!name){ alert('Please select a defect first.'); return; }
     renderAIVariationChart(name);
   });
+}
+
+function getAIVariationFilters(){
+  return {
+    type: document.getElementById('aiVarType').value.trim().toUpperCase(),
+    texture: document.getElementById('aiVarTexture').value,
+    size: document.getElementById('aiVarSize').value,
+    gl: document.getElementById('aiVarGL').value,
+    lot: document.getElementById('aiVarLot').value.trim(),
+    shift: document.getElementById('aiVarShift').value,
+    kiln: document.getElementById('aiVarKiln').value,
+    sortingLine: document.getElementById('aiVarSortingLine').value
+  };
 }
 
 function renderAIVariationChart(itemName){
@@ -2321,7 +2426,18 @@ function renderAIVariationChart(itemName){
   const days = [];
   for(let i=9; i>=0; i--) days.push(isoDaysAgo(i));
 
-  const records = getRecordsInDateRange(from, to);
+  const f = getAIVariationFilters();
+  const records = getRecordsInDateRange(from, to).filter(r=>{
+    if(f.type && !(r.type||'').toUpperCase().includes(f.type)) return false;
+    if(f.texture && r.texture !== f.texture) return false;
+    if(f.size && r.size !== f.size) return false;
+    if(f.gl && r.gl !== f.gl) return false;
+    if(f.lot && r.lot !== f.lot) return false;
+    if(f.shift && r.shift !== f.shift) return false;
+    if(f.kiln && r.kiln !== f.kiln) return false;
+    if(f.sortingLine && r.sortingLine !== f.sortingLine) return false;
+    return true;
+  });
   const safeDiv = (a,b)=> b ? a/b : 0;
 
   const cSeries = [], damSeries = [];
@@ -2375,17 +2491,42 @@ function renderAIVariationChart(itemName){
 const SQUARING_DEFECT_NAMES = ['BROKEN COR / EDGES [SQ - MC]', 'EDGE CHIP', 'UNEVENESS SQUARING'];
 const SQUARING_SUBCATEGORY_KEYS = ['cDiag', 'cSize', 'damLiner']; // Diagonal (C), Size Out (C), Liner (Damage)
 
-function renderAISquaringResult(){
+function renderAISquaringSetup(){
   const body = document.getElementById('aiResultBody');
+  body.innerHTML = `
+    <div class="ai-variation-controls">
+      <div class="field">
+        <label>Sorting Line</label>
+        <select id="aiSquaringLine">
+          <option value="">All Sorting Lines</option>
+          <option>SL05</option><option>SL06</option><option>SL07</option>
+        </select>
+      </div>
+      <button class="btn primary" id="aiSquaringShow">Show Chart</button>
+    </div>
+    <div id="aiSquaringChartWrap"></div>`;
+
+  document.getElementById('aiSquaringShow').addEventListener('click', ()=>{
+    renderAISquaringResult(document.getElementById('aiSquaringLine').value);
+  });
+
+  // Show an initial "All Sorting Lines" chart immediately, same as other
+  // date-range questions — the dropdown lets the user narrow it down further.
+  renderAISquaringResult('');
+}
+
+function renderAISquaringResult(sortingLine){
+  const wrap = document.getElementById('aiSquaringChartWrap');
   const days = [];
   for(let i=9; i>=0; i--) days.push(isoDaysAgo(i));
   const from = days[0], to = days[days.length-1];
 
-  const records = getRecordsInDateRange(from, to);
+  const records = getRecordsInDateRange(from, to).filter(r=> !sortingLine || r.sortingLine === sortingLine);
   const safeDiv = (a,b)=> b ? a/b : 0;
+  const lineLabel = sortingLine || 'All Sorting Lines';
 
   if(!records.length){
-    body.innerHTML = `<div class="ai-summary-line">No saved records found for the last 10 days (${formatDateDMY(from)} – ${formatDateDMY(to)}) to analyze Squaring Machine defects.</div>`;
+    wrap.innerHTML = `<div class="ai-summary-line">No saved records found for ${lineLabel} in the last 10 days (${formatDateDMY(from)} – ${formatDateDMY(to)}) to analyze Squaring Machine defects.</div>`;
     return;
   }
 
@@ -2413,18 +2554,18 @@ function renderAISquaringResult(){
   const peakDay = days[series.indexOf(peak)];
 
   const summaryLine = hasAnyData
-    ? `Covering ${formatDateDMY(from)} – ${formatDateDMY(to)}: Squaring Machine defects (Diagonal, Size Out, Liner, Broken Cor/Edges [SQ-MC], Edge Chip, Uneveness Squaring — combined C Grade + Damage share of production) peaked at <b>${pct(peak/100)}</b> on ${formatDateDMY(peakDay)}, and stood at <b>${pct(latest/100)}</b> on the most recent day (${formatDateDMY(to)}).`
-    : `No Squaring Machine defects (Diagonal, Size Out, Liner, Broken Cor/Edges [SQ-MC], Edge Chip, Uneveness Squaring) were recorded in the last 10 days (${formatDateDMY(from)} – ${formatDateDMY(to)}).`;
+    ? `Covering ${lineLabel}, ${formatDateDMY(from)} – ${formatDateDMY(to)}: Squaring Machine defects (Diagonal, Size Out, Liner, Broken Cor/Edges [SQ-MC], Edge Chip, Uneveness Squaring — combined C Grade + Damage share of production) peaked at <b>${pct(peak/100)}</b> on ${formatDateDMY(peakDay)}, and stood at <b>${pct(latest/100)}</b> on the most recent day (${formatDateDMY(to)}).`
+    : `No Squaring Machine defects (Diagonal, Size Out, Liner, Broken Cor/Edges [SQ-MC], Edge Chip, Uneveness Squaring) were recorded for ${lineLabel} in the last 10 days (${formatDateDMY(from)} – ${formatDateDMY(to)}).`;
 
-  body.innerHTML = `
-    <div class="ai-summary-line">${summaryLine}</div>
+  wrap.innerHTML = `
+    <div class="ai-summary-line" style="margin-top:14px;">${summaryLine}</div>
     <div class="chart-box" style="height:340px;"><canvas id="aiSquaringCanvas"></canvas></div>`;
 
   const ctx = document.getElementById('aiSquaringCanvas');
   new Chart(ctx, {
     type:'line',
     data:{ labels: days.map(formatDateDMY), datasets:[{
-      label:'Squaring Machine Defects % (C Grade + Damage combined)',
+      label:`Squaring Machine Defects % — ${lineLabel} (C Grade + Damage combined)`,
       data: series,
       borderColor:'#C2410C', backgroundColor:'rgba(194,65,12,0.12)',
       fill:true, tension:0.25, pointRadius:4, pointBackgroundColor:'#C2410C'
