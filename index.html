@@ -327,11 +327,20 @@
     .actions{ justify-content:stretch; }
     .actions button.btn{ flex:1; }
     #saveStatus{ width:100%; margin-right:0; order:-1; }
-    .filter-grid{ grid-template-columns:1fr; }
+    .filter-grid{ grid-template-columns:1fr !important; }
     .filter-actions{ justify-content:stretch !important; }
     .filter-actions #filterStatus, .filter-actions #analysisFilterStatus{ width:100%; order:-1; margin-bottom:2px; }
     .filter-actions button.btn{ flex:1; }
     .ai-question-grid{ grid-template-columns:1fr; }
+
+    /* Quality Insights (Squaring / Variation) — these two questions have
+       a dropdown+button setup step the other questions don't, and their
+       controls weren't stacking cleanly on narrow screens. */
+    .ai-variation-controls{ flex-direction:column; align-items:stretch; gap:12px; }
+    .ai-variation-controls .field{ min-width:0; width:100%; }
+    .ai-variation-controls button.btn{ width:100%; }
+    #aiVariationChartWrap .chart-box,
+    #aiSquaringChartWrap .chart-box{ height:280px; }
   }
 
   /* ---------- Login Screen ---------- */
@@ -420,7 +429,7 @@
   <button class="tab-btn" data-view="analysis">Defect Analysis</button>
   <button class="tab-btn" data-view="dashboard">Dashboard</button>
   <button class="tab-btn" data-view="records">Records</button>
-  <button class="tab-btn" data-view="ai">AI Assistant</button>
+  <button class="tab-btn" data-view="ai">Quality Insights</button>
 </nav>
 
 <main>
@@ -1593,13 +1602,17 @@ function gatherRecord(){
     damagePct: +(damPct*100).toFixed(2),
     summary: { ...summary },
     summaryPcs: { ...summaryPcs, totalSellablePcs: subTotalsPcs.sellable, totalCGradePcs: subTotalsPcs.cGrade, totalDamagesPcs: subTotalsPcs.damages },
+    // Only defects with actual data are saved — with 41 possible defects and
+    // typically only a handful logged per entry, this keeps each saved
+    // record small. Every place that reads rec.defects already treats a
+    // missing entry the same as zero, so nothing downstream needed to change.
     defects: DEFECTS.map((name, idx)=>({
       name,
       qty2nd: rows[idx].c, qtyC: rows[idx].f, qtyDam: rows[idx].i,
       sqm2nd: +(rows[idx].c*sqmPerPc).toFixed(4),
       sqmC: +(rows[idx].f*sqmPerPc).toFixed(4),
       sqmDam: +(rows[idx].i*sqmPerPc).toFixed(4)
-    }))
+    })).filter(d=> d.qty2nd>0 || d.qtyC>0 || d.qtyDam>0)
   };
 }
 
@@ -1611,7 +1624,7 @@ function exportCSV(){
     [],
     ['Defect No','Description','2nd Grade Qty (pcs)','C Grade Qty (pcs)','Damage Qty (pcs)']
   ];
-  rec.defects.forEach((d,i)=> csvRows.push([i+1, d.name, d.qty2nd, d.qtyC, d.qtyDam]));
+  rec.defects.forEach(d=> csvRows.push([DEFECTS.indexOf(d.name)+1, d.name, d.qty2nd, d.qtyC, d.qtyDam]));
   const csv = csvRows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob = new Blob([csv], {type:'text/csv'});
   const a = document.createElement('a');
@@ -2008,6 +2021,20 @@ async function fetchAllRecords(force){
   return window._allRecords;
 }
 
+// Narrow, uncached fetch for the AI Assistant's fixed date-window questions
+// (Yesterday, Last Week, Last 10 Days, Recurring, Variation, Squaring).
+// The server filters by date BEFORE parsing each row's JSON, so this stays
+// fast even as the Records sheet grows — unlike fetchAllRecords, which pulls
+// and caches the entire history for the Dashboard/Analysis tabs' free-form
+// filters (those can't be date-bounded server-side since "All Dates" is a
+// valid choice there).
+async function fetchRecordsInRange(fromDate, toDate){
+  if(!API_URL) return [];
+  const res = await fetch(`${API_URL}?action=getRecords&from=${fromDate}&to=${toDate}`);
+  const data = await res.json();
+  return data.records || [];
+}
+
 async function initDashboard(){
   const status = document.getElementById('filterStatus');
   status.textContent = 'Loading saved records…';
@@ -2148,11 +2175,6 @@ function isoDaysAgo(n){
   return d.toISOString().slice(0,10);
 }
 
-function getRecordsInDateRange(fromISO, toISO){
-  const list = window._allRecords || [];
-  return list.filter(r => r.date >= fromISO && r.date <= toISO);
-}
-
 const AI_QUESTION_TITLES = {
   'yesterday': "Yesterday's Quality Issues",
   'lastweek': "Last Week's Quality Issues (7 days)",
@@ -2171,19 +2193,17 @@ async function runAIQuestion(q){
   titleEl.innerHTML = `<span class="n">•</span> ${AI_QUESTION_TITLES[q] || 'Result'}`;
   body.innerHTML = '<div class="ai-loading">Analyzing saved records…</div>';
 
-  await fetchAllRecords(); // ensure cache is fresh on first use
-
   if(q === 'yesterday'){
     const day = isoDaysAgo(1);
-    renderAIDateRangeResult(day, day, 'Yesterday');
+    await renderAIDateRangeResult(day, day, 'Yesterday');
   } else if(q === 'lastweek'){
-    renderAIDateRangeResult(isoDaysAgo(7), isoDaysAgo(1), 'the last 7 days');
+    await renderAIDateRangeResult(isoDaysAgo(7), isoDaysAgo(1), 'the last 7 days');
   } else if(q === 'last10'){
-    renderAIDateRangeResult(isoDaysAgo(10), isoDaysAgo(1), 'the last 10 days');
+    await renderAIDateRangeResult(isoDaysAgo(10), isoDaysAgo(1), 'the last 10 days');
   } else if(q === 'recurring-damage'){
-    renderAIRecurringResult('dam');
+    await renderAIRecurringResult('dam');
   } else if(q === 'recurring-cgrade'){
-    renderAIRecurringResult('c');
+    await renderAIRecurringResult('c');
   } else if(q === 'variation'){
     renderAIVariationSetup();
   } else if(q === 'squaring'){
@@ -2192,9 +2212,9 @@ async function runAIQuestion(q){
 }
 
 /* ---- Q1-3: date range investigation ---- */
-function renderAIDateRangeResult(fromISO, toISO, label){
+async function renderAIDateRangeResult(fromISO, toISO, label){
   const body = document.getElementById('aiResultBody');
-  const records = getRecordsInDateRange(fromISO, toISO);
+  const records = await fetchRecordsInRange(fromISO, toISO);
 
   if(!records.length){
     body.innerHTML = `<div class="ai-summary-line">No saved records found for ${label} (${formatDateDMY(fromISO)}${fromISO!==toISO ? ' – '+formatDateDMY(toISO) : ''}).</div>`;
@@ -2245,7 +2265,7 @@ function monthStartISO(){
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
 }
 
-function renderAIRecurringResult(grade){
+async function renderAIRecurringResult(grade){
   const body = document.getElementById('aiResultBody');
   const gradeLabel = grade==='c' ? 'C Grade' : 'Damage';
 
@@ -2258,8 +2278,10 @@ function renderAIRecurringResult(grade){
     return;
   }
 
-  const recentRecords = getRecordsInDateRange(recentFrom, recentTo);
-  const restRecords = getRecordsInDateRange(restFrom, restTo);
+  const [recentRecords, restRecords] = await Promise.all([
+    fetchRecordsInRange(recentFrom, recentTo),
+    fetchRecordsInRange(restFrom, restTo)
+  ]);
 
   if(!recentRecords.length || !restRecords.length){
     const missing = !recentRecords.length ? 'the last 10 days' : 'the rest of this month';
@@ -2418,8 +2440,9 @@ function getAIVariationFilters(){
   };
 }
 
-function renderAIVariationChart(itemName){
+async function renderAIVariationChart(itemName){
   const wrap = document.getElementById('aiVariationChartWrap');
+  wrap.innerHTML = '<div class="ai-loading">Loading…</div>';
   const item = AI_VARIATION_ITEMS.find(x=>x.name===itemName);
   const from = isoDaysAgo(9), to = isoDaysAgo(0); // last 10 calendar days including today
 
@@ -2427,7 +2450,7 @@ function renderAIVariationChart(itemName){
   for(let i=9; i>=0; i--) days.push(isoDaysAgo(i));
 
   const f = getAIVariationFilters();
-  const records = getRecordsInDateRange(from, to).filter(r=>{
+  const records = (await fetchRecordsInRange(from, to)).filter(r=>{
     if(f.type && !(r.type||'').toUpperCase().includes(f.type)) return false;
     if(f.texture && r.texture !== f.texture) return false;
     if(f.size && r.size !== f.size) return false;
@@ -2464,7 +2487,7 @@ function renderAIVariationChart(itemName){
   });
 
   const hasAnyData = cSeries.some(v=>v>0) || damSeries.some(v=>v>0);
-  wrap.innerHTML = `<div class="chart-box" style="height:340px; margin-top:16px;"><canvas id="aiVariationCanvas"></canvas></div>` +
+  wrap.innerHTML = `<div class="chart-box" style="margin-top:16px;"><canvas id="aiVariationCanvas"></canvas></div>` +
     (hasAnyData ? '' : `<div class="ai-summary-line" style="margin-top:10px;">No recorded data for "${itemName}" in the last 10 days — both lines below will be flat at zero.</div>`);
 
   const datasets = [];
@@ -2515,13 +2538,14 @@ function renderAISquaringSetup(){
   renderAISquaringResult('');
 }
 
-function renderAISquaringResult(sortingLine){
+async function renderAISquaringResult(sortingLine){
   const wrap = document.getElementById('aiSquaringChartWrap');
+  wrap.innerHTML = '<div class="ai-loading">Loading…</div>';
   const days = [];
   for(let i=9; i>=0; i--) days.push(isoDaysAgo(i));
   const from = days[0], to = days[days.length-1];
 
-  const records = getRecordsInDateRange(from, to).filter(r=> !sortingLine || r.sortingLine === sortingLine);
+  const records = (await fetchRecordsInRange(from, to)).filter(r=> !sortingLine || r.sortingLine === sortingLine);
   const safeDiv = (a,b)=> b ? a/b : 0;
   const lineLabel = sortingLine || 'All Sorting Lines';
 
@@ -2559,7 +2583,7 @@ function renderAISquaringResult(sortingLine){
 
   wrap.innerHTML = `
     <div class="ai-summary-line" style="margin-top:14px;">${summaryLine}</div>
-    <div class="chart-box" style="height:340px;"><canvas id="aiSquaringCanvas"></canvas></div>`;
+    <div class="chart-box"><canvas id="aiSquaringCanvas"></canvas></div>`;
 
   const ctx = document.getElementById('aiSquaringCanvas');
   new Chart(ctx, {
