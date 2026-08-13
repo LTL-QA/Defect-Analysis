@@ -2035,6 +2035,22 @@ async function fetchRecordsInRange(fromDate, toDate){
   return data.records || [];
 }
 
+// Cache-first date-range fetch for Quality Insights. If the full record
+// set is already cached (e.g. the user already visited Dashboard/Analysis/
+// Records, or asked an earlier question this session), filtering it
+// client-side is instant — no network call at all. Only when nothing is
+// cached yet does it hit the server for just the narrow window needed,
+// while quietly warming the full cache in the background so every
+// question after the first one becomes instant too.
+async function getAIRecordsInRange(fromISO, toISO){
+  if(window._allRecords){
+    return window._allRecords.filter(r => r.date >= fromISO && r.date <= toISO);
+  }
+  const narrow = fetchRecordsInRange(fromISO, toISO);
+  fetchAllRecords(); // fire-and-forget cache warm-up, not awaited
+  return narrow;
+}
+
 async function initDashboard(){
   const status = document.getElementById('filterStatus');
   status.textContent = 'Loading saved records…';
@@ -2214,7 +2230,7 @@ async function runAIQuestion(q){
 /* ---- Q1-3: date range investigation ---- */
 async function renderAIDateRangeResult(fromISO, toISO, label){
   const body = document.getElementById('aiResultBody');
-  const records = await fetchRecordsInRange(fromISO, toISO);
+  const records = await getAIRecordsInRange(fromISO, toISO);
 
   if(!records.length){
     body.innerHTML = `<div class="ai-summary-line">No saved records found for ${label} (${formatDateDMY(fromISO)}${fromISO!==toISO ? ' – '+formatDateDMY(toISO) : ''}).</div>`;
@@ -2279,8 +2295,8 @@ async function renderAIRecurringResult(grade){
   }
 
   const [recentRecords, restRecords] = await Promise.all([
-    fetchRecordsInRange(recentFrom, recentTo),
-    fetchRecordsInRange(restFrom, restTo)
+    getAIRecordsInRange(recentFrom, recentTo),
+    getAIRecordsInRange(restFrom, restTo)
   ]);
 
   if(!recentRecords.length || !restRecords.length){
@@ -2450,7 +2466,7 @@ async function renderAIVariationChart(itemName){
   for(let i=9; i>=0; i--) days.push(isoDaysAgo(i));
 
   const f = getAIVariationFilters();
-  const records = (await fetchRecordsInRange(from, to)).filter(r=>{
+  const records = (await getAIRecordsInRange(from, to)).filter(r=>{
     if(f.type && !(r.type||'').toUpperCase().includes(f.type)) return false;
     if(f.texture && r.texture !== f.texture) return false;
     if(f.size && r.size !== f.size) return false;
@@ -2545,7 +2561,7 @@ async function renderAISquaringResult(sortingLine){
   for(let i=9; i>=0; i--) days.push(isoDaysAgo(i));
   const from = days[0], to = days[days.length-1];
 
-  const records = (await fetchRecordsInRange(from, to)).filter(r=> !sortingLine || r.sortingLine === sortingLine);
+  const records = (await getAIRecordsInRange(from, to)).filter(r=> !sortingLine || r.sortingLine === sortingLine);
   const safeDiv = (a,b)=> b ? a/b : 0;
   const lineLabel = sortingLine || 'All Sorting Lines';
 
