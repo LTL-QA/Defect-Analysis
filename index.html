@@ -252,6 +252,14 @@
   .ai-q-icon{ font-size:20px; }
   .ai-loading{ color:var(--ink-soft); font-size:13px; padding:10px 0; }
   .ai-summary-line{ font-size:13.5px; color:var(--ink); margin-bottom:14px; line-height:1.6; }
+  .ai-impact-callout{
+    background:#fff8ec; border:1px solid var(--amber); border-left:4px solid var(--amber);
+    border-radius:8px; padding:10px 14px; margin-bottom:14px;
+  }
+  .ai-impact-callout.ai-impact-type{ background:#fdeceb; border-color:var(--terracotta); border-left-color:var(--terracotta); }
+  .ai-impact-title{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:var(--ink-soft); margin-bottom:4px; }
+  .ai-impact-body{ font-size:13.5px; color:var(--ink); line-height:1.6; }
+  .ai-impact-body b{ color:var(--ink); }
   .ai-summary-line b{ color:var(--teal-deep); }
   .ai-variation-controls{ display:flex; gap:10px; align-items:flex-end; margin-bottom:16px; flex-wrap:wrap; }
   .ai-variation-controls .field{ min-width:220px; }
@@ -2211,7 +2219,7 @@ async function runAIQuestion(q){
 
   if(q === 'yesterday'){
     const day = isoDaysAgo(1);
-    await renderAIDateRangeResult(day, day, 'Yesterday');
+    await renderAIDateRangeResult(day, day, 'Yesterday', true);
   } else if(q === 'lastweek'){
     await renderAIDateRangeResult(isoDaysAgo(7), isoDaysAgo(1), 'the last 7 days');
   } else if(q === 'last10'){
@@ -2228,7 +2236,7 @@ async function runAIQuestion(q){
 }
 
 /* ---- Q1-3: date range investigation ---- */
-async function renderAIDateRangeResult(fromISO, toISO, label){
+async function renderAIDateRangeResult(fromISO, toISO, label, isYesterday){
   const body = document.getElementById('aiResultBody');
   const records = await getAIRecordsInRange(fromISO, toISO);
 
@@ -2244,6 +2252,9 @@ async function renderAIDateRangeResult(fromISO, toISO, label){
 
   const summaryLine = `Covering <b>${records.length}</b> saved record(s) from ${formatDateDMY(fromISO)}${fromISO!==toISO ? ' to '+formatDateDMY(toISO) : ''} — Total Production <b>${agg.grand.toFixed(2)} SQM</b>, Yield <b>${pct(agg.sellablePct)}</b>, C Grade <b>${pct(agg.cPct)}</b>, Damage <b>${pct(agg.damPct)}</b>.`;
 
+  const glResult = computeMostImpactedGL(records);
+  const impactHTML = buildGLImpactHTML(glResult, label) + (isYesterday ? buildTypeImpactHTML(computeLowestYieldType(records)) : '');
+
   const subItem = (name,val) => `<tr class="sub-item"><td>${name}</td><td class="value">${val}</td></tr>`;
   const groupHeader = (cls,label,val) => `<tr class="group-header ${cls}"><td>${label}</td><td class="value">${val}</td></tr>`;
   const emptyNote = (t) => `<tr class="empty-note"><td colspan="2">${t}</td></tr>`;
@@ -2255,6 +2266,7 @@ async function renderAIDateRangeResult(fromISO, toISO, label){
 
   body.innerHTML = `
     <div class="ai-summary-line">${summaryLine}</div>
+    ${impactHTML}
     <div class="chart-box" style="height:320px; margin-bottom:18px;"><canvas id="aiParetoChart"></canvas></div>
     <div class="analysis-grid">
       <div class="summary-table-inner"><table class="summary-table"><tbody>${leftRows}</tbody></table></div>
@@ -2273,6 +2285,59 @@ async function renderAIDateRangeResult(fromISO, toISO, label){
         datalabels:{ display: ctx => ctx.dataset.data[ctx.dataIndex] > 0, color:'#fff', font:{size:9,weight:'700'}, anchor:'center', align:'center', formatter: v=>v+'%' } },
       scales:{ x:{ stacked:true, ticks:{ autoSkip:false, maxRotation:60, minRotation:40, font:{size:9} } }, y:{ stacked:true, ticks:{ callback:v=>v+'%' } } } }
   });
+}
+
+/* ---- Most-impacted Glazing Line / lowest-yield Type helpers ---- */
+const AI_KNOWN_GLS = ['GL-01','GL-02','GL-05','GL-06'];
+
+function computeMostImpactedGL(records){
+  let worst = null;
+  AI_KNOWN_GLS.forEach(gl=>{
+    const subset = records.filter(r=>r.gl===gl);
+    if(!subset.length) return;
+    const agg = aggregateRecords(subset);
+    if(agg.grand<=0) return;
+    if(!worst || agg.sellablePct < worst.sellablePct){
+      worst = { gl, sellablePct: agg.sellablePct, cPct: agg.cPct, damPct: agg.damPct };
+    }
+  });
+  return worst;
+}
+
+function computeLowestYieldType(records){
+  const types = [...new Set(records.map(r=>r.type).filter(Boolean))];
+  let worst = null;
+  types.forEach(type=>{
+    const subset = records.filter(r=>r.type===type);
+    if(!subset.length) return;
+    const agg = aggregateRecords(subset);
+    if(agg.grand<=0) return;
+    if(!worst || agg.sellablePct < worst.sellablePct){
+      const top3 = [...agg.paretoItems].filter(x=>x.cPct>0 || x.damPct>0)
+        .sort((a,b)=>(b.cPct+b.damPct)-(a.cPct+a.damPct)).slice(0,3);
+      worst = { type, sellablePct: agg.sellablePct, top3 };
+    }
+  });
+  return worst;
+}
+
+function buildGLImpactHTML(glResult, periodLabel){
+  if(!glResult) return '';
+  return `<div class="ai-impact-callout">
+    <div class="ai-impact-title">⚠ Most Impacted Glazing Line ${periodLabel ? '('+periodLabel+')' : ''}</div>
+    <div class="ai-impact-body"><b>${glResult.gl}</b> — Cumulative Saleable Yield <b>${pct(glResult.sellablePct)}</b>, C Grade <b>${pct(glResult.cPct)}</b>, Damage <b>${pct(glResult.damPct)}</b></div>
+  </div>`;
+}
+
+function buildTypeImpactHTML(typeResult){
+  if(!typeResult) return '';
+  const defectsStr = typeResult.top3.length
+    ? typeResult.top3.map(x=>`${x.name} (${pct(x.cPct+x.damPct,2)})`).join(', ')
+    : 'none recorded';
+  return `<div class="ai-impact-callout ai-impact-type">
+    <div class="ai-impact-title">⚠ Lowest-Yield Type (Yesterday)</div>
+    <div class="ai-impact-body"><b>${typeResult.type}</b> — Yield <b>${pct(typeResult.sellablePct)}</b><br>3 Major Defects: ${defectsStr}</div>
+  </div>`;
 }
 
 /* ---- Q4-5: recurring problem detection ---- */
@@ -2321,12 +2386,15 @@ async function renderAIRecurringResult(grade){
   const rising = combined.filter(x=>x.delta>0).sort((a,b)=>b.delta-a.delta).slice(0,8);
 
   if(!rising.length){
-    body.innerHTML = `<div class="ai-summary-line">No ${gradeLabel} defects show a rise in the last 10 days (${formatDateDMY(recentFrom)} – ${formatDateDMY(recentTo)}) compared to the rest of this month (${formatDateDMY(restFrom)} – ${formatDateDMY(restTo)}) — nothing stands out as a growing recurring problem right now.</div>`;
+    body.innerHTML = `<div class="ai-summary-line">No ${gradeLabel} defects show a rise in the last 10 days (${formatDateDMY(recentFrom)} – ${formatDateDMY(recentTo)}) compared to the rest of this month (${formatDateDMY(restFrom)} – ${formatDateDMY(restTo)}) — nothing stands out as a growing recurring problem right now.</div>${buildGLImpactHTML(computeMostImpactedGL(recentRecords), 'last 10 days')}`;
     return;
   }
 
   const top = rising[0];
   const summaryLine = `Comparing the last 10 days (${formatDateDMY(recentFrom)} – ${formatDateDMY(recentTo)}) against the rest of this month (${formatDateDMY(restFrom)} – ${formatDateDMY(restTo)}): <b>${top.name}</b> shows the sharpest rise in ${gradeLabel}, up from ${pct(top.earlier)} to ${pct(top.recent)} (+${pct(top.delta)}).`;
+
+  const glResult = computeMostImpactedGL(recentRecords);
+  const impactHTML = buildGLImpactHTML(glResult, 'last 10 days');
 
   const rows = rising.map(x=>`
     <tr class="sub-item">
@@ -2337,6 +2405,7 @@ async function renderAIRecurringResult(grade){
 
   body.innerHTML = `
     <div class="ai-summary-line">${summaryLine}</div>
+    ${impactHTML}
     <div class="chart-box" style="height:${Math.max(220, rising.length*36)}px; margin-bottom:18px;"><canvas id="aiRecurringChart"></canvas></div>
     <div class="summary-table-inner" style="max-width:640px;">
       <table class="summary-table">
