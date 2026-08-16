@@ -936,12 +936,26 @@ let paretoChart, cGradePieChart, damagePieChart;
 /* =====================================================================
    INIT
 ===================================================================== */
+function currentMonthStartISO(){
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
+}
+
 function init(){
   const now = new Date();
   document.getElementById('jDate').value = now.toISOString().slice(0,10);
   const yy = String(now.getFullYear()).slice(-2);
   const mm = String(now.getMonth()+1).padStart(2,'0');
   document.getElementById('jLot').value = `${yy}/${mm}`;
+
+  // Dashboard & Defect Analysis default to "this month only" so switching
+  // into a new month doesn't silently mix in last month's data. Set once
+  // at page load — revisiting the tab later in the session won't reset a
+  // filter the user has since changed themselves.
+  const monthStart = currentMonthStartISO();
+  document.getElementById('fDateFrom').value = monthStart;
+  document.getElementById('aDateFrom').value = monthStart;
+
   buildDefectRows();
   wireEvents();
   recalcGradeSummaryFromPcs();
@@ -1095,7 +1109,8 @@ function wireEvents(){
   });
   document.getElementById('fLot').addEventListener('input', applyFilters);
   document.getElementById('btnResetFilters').addEventListener('click', ()=>{
-    ['fDateFrom','fDateTo','fType','fLot'].forEach(id=>document.getElementById(id).value='');
+    ['fDateTo','fType','fLot'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('fDateFrom').value = currentMonthStartISO();
     ['fTexture','fSize','fGL','fShift','fKiln','fSortingLine'].forEach(id=>document.getElementById(id).value='');
     applyFilters();
   });
@@ -1110,7 +1125,8 @@ function wireEvents(){
   });
   document.getElementById('aLot').addEventListener('input', applyAnalysisFilters);
   document.getElementById('btnResetAnalysisFilters').addEventListener('click', ()=>{
-    ['aDateFrom','aDateTo','aType','aLot'].forEach(id=>document.getElementById(id).value='');
+    ['aDateTo','aType','aLot'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('aDateFrom').value = currentMonthStartISO();
     ['aTexture','aSize','aGL','aShift','aKiln','aSortingLine'].forEach(id=>document.getElementById(id).value='');
     applyAnalysisFilters();
   });
@@ -2298,7 +2314,7 @@ function computeMostImpactedGL(records){
     const agg = aggregateRecords(subset);
     if(agg.grand<=0) return;
     if(!worst || agg.sellablePct < worst.sellablePct){
-      worst = { gl, sellablePct: agg.sellablePct, cPct: agg.cPct, damPct: agg.damPct };
+      worst = { gl, sellablePct: agg.sellablePct, cPct: agg.cPct, damPct: agg.damPct, production: agg.grand };
     }
   });
   return worst;
@@ -2315,7 +2331,7 @@ function computeLowestYieldType(records){
     if(!worst || agg.sellablePct < worst.sellablePct){
       const top3 = [...agg.paretoItems].filter(x=>x.cPct>0 || x.damPct>0)
         .sort((a,b)=>(b.cPct+b.damPct)-(a.cPct+a.damPct)).slice(0,3);
-      worst = { type, sellablePct: agg.sellablePct, top3 };
+      worst = { type, sellablePct: agg.sellablePct, cPct: agg.cPct, damPct: agg.damPct, production: agg.grand, top3 };
     }
   });
   return worst;
@@ -2325,7 +2341,7 @@ function buildGLImpactHTML(glResult, periodLabel){
   if(!glResult) return '';
   return `<div class="ai-impact-callout">
     <div class="ai-impact-title">⚠ Most Impacted Glazing Line ${periodLabel ? '('+periodLabel+')' : ''}</div>
-    <div class="ai-impact-body"><b>${glResult.gl}</b> — Cumulative Saleable Yield <b>${pct(glResult.sellablePct)}</b>, C Grade <b>${pct(glResult.cPct)}</b>, Damage <b>${pct(glResult.damPct)}</b></div>
+    <div class="ai-impact-body"><b>${glResult.gl}</b> — Cumulative Saleable Yield <b>${pct(glResult.sellablePct)}</b>, C Grade <b>${pct(glResult.cPct)}</b>, Damage <b>${pct(glResult.damPct)}</b>, Production <b>${glResult.production.toFixed(2)} SQM</b></div>
   </div>`;
 }
 
@@ -2336,7 +2352,7 @@ function buildTypeImpactHTML(typeResult){
     : 'none recorded';
   return `<div class="ai-impact-callout ai-impact-type">
     <div class="ai-impact-title">⚠ Lowest-Yield Type (Yesterday)</div>
-    <div class="ai-impact-body"><b>${typeResult.type}</b> — Yield <b>${pct(typeResult.sellablePct)}</b><br>3 Major Defects: ${defectsStr}</div>
+    <div class="ai-impact-body"><b>${typeResult.type}</b> — Yield <b>${pct(typeResult.sellablePct)}</b>, C Grade <b>${pct(typeResult.cPct)}</b>, Damage <b>${pct(typeResult.damPct)}</b>, Production <b>${typeResult.production.toFixed(2)} SQM</b><br>3 Major Defects: ${defectsStr}</div>
   </div>`;
 }
 
