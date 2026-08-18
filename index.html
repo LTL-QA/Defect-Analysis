@@ -234,6 +234,11 @@
   table.records th{ text-align:left; padding:8px 10px; background:#f2f5f5; color:var(--ink-soft); text-transform:uppercase; font-size:10px; letter-spacing:0.04em; }
   table.records td{ padding:8px 10px; border-bottom:1px solid #eef1f1; font-family:var(--font-mono); }
   table.records tr:hover{ background:#f7faf9; }
+  .bal-input{
+    width:84px; padding:5px 7px; border:1px solid var(--panel-line); border-radius:6px;
+    font-family:var(--font-mono); text-align:right; font-size:12.5px; background:#fbfcfc; color:var(--ink);
+  }
+  .bal-input:focus{ outline:none; border-color:var(--teal); }
 
   /* ---------- Analysis Summary (receipt-style) ---------- */
   table.summary-table{ width:100%; border-collapse:collapse; font-size:13px; }
@@ -302,9 +307,11 @@
        here stops that zoom without affecting the desktop layout. */
     .field input, .field select,
     .sumrow input,
-    table.defects input.qty{ font-size:16px; }
+    table.defects input.qty,
+    .bal-input{ font-size:16px; }
     .sumrow input{ width:96px; padding:6px 8px; }
     table.defects input.qty{ width:72px; padding:6px 6px; }
+    .bal-input{ width:76px; padding:6px 6px; }
     .header-meta{ font-size:10.5px; text-align:left; width:100%; }
 
     nav.tabs{
@@ -834,6 +841,38 @@
         </table>
       </div>
     </div>
+
+    <div class="card">
+      <h2>Production Balancing <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--ink-soft)">— reconcile sorted vs. barcoded production per Type, month-end</span></h2>
+      <div class="field" style="max-width:220px; margin-bottom:14px;">
+        <label>Month</label>
+        <input type="month" id="balMonth">
+      </div>
+      <div id="balancingWrap" style="overflow-x:auto;">
+        <table class="records" id="balancingTable">
+          <thead>
+            <tr>
+              <th rowspan="2">Type</th>
+              <th colspan="2">1st Grade</th>
+              <th colspan="2">2nd Grade</th>
+              <th colspan="2">C Grade</th>
+              <th colspan="2">Damage</th>
+              <th rowspan="2"></th>
+            </tr>
+            <tr>
+              <th>Current</th><th>Barcoded</th>
+              <th>Current</th><th>Barcoded</th>
+              <th>Current</th><th>Barcoded</th>
+              <th>Current</th><th>Barcoded</th>
+            </tr>
+          </thead>
+          <tbody id="balancingBody">
+            <tr><td colspan="10" style="color:var(--ink-soft)">Select a month above to load Types for balancing.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="balancingNote" style="font-size:12px; color:var(--ink-soft); margin-top:10px;"></div>
+    </div>
   </section>
 
   <!-- ============ AI ASSISTANT VIEW ============ -->
@@ -1043,8 +1082,8 @@ function wireEvents(){
       document.getElementById('view-'+b.dataset.view).classList.add('active');
       if(b.dataset.view==='dashboard') initDashboard();
       if(b.dataset.view==='analysis') initAnalysis();
-      if(b.dataset.view==='records') fetchAllRecords().then(renderRecordsTable);
-      if(b.dataset.view==='ai') fetchAllRecords();
+      if(b.dataset.view==='records'){ fetchAllRecords().then(renderRecordsTable); initBalancingSection(); }
+      if(b.dataset.view==='ai'){ fetchAllRecords(); fetchBalancingData(); }
     });
   });
 
@@ -1099,6 +1138,9 @@ function wireEvents(){
   document.getElementById('btnCSV').addEventListener('click', exportCSV);
   document.getElementById('btnSave').addEventListener('click', saveRecord);
   document.getElementById('btnRefresh').addEventListener('click', loadRecords);
+  document.getElementById('balMonth').addEventListener('change', ()=>{
+    renderBalancingTable(document.getElementById('balMonth').value);
+  });
   document.getElementById('btnApplyFilters').addEventListener('click', applyFilters);
   ['fDateFrom','fDateTo','fTexture','fSize','fShift','fKiln','fSortingLine'].forEach(id=>{
     document.getElementById(id).addEventListener('change', applyFilters);
@@ -1764,6 +1806,104 @@ async function loadRecords(){
 }
 
 /* =====================================================================
+   PRODUCTION BALANCING UI
+===================================================================== */
+let balancingInitialized = false;
+
+async function initBalancingSection(){
+  const monthInput = document.getElementById('balMonth');
+  if(!balancingInitialized){
+    const now = new Date();
+    monthInput.value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+    balancingInitialized = true;
+  }
+  await Promise.all([fetchAllRecords(), fetchBalancingData()]);
+  renderBalancingTable(monthInput.value);
+}
+
+function renderBalancingTable(monthKey){
+  const body = document.getElementById('balancingBody');
+  const note = document.getElementById('balancingNote');
+  note.textContent = '';
+
+  if(!monthKey){ body.innerHTML = '<tr><td colspan="10" style="color:var(--ink-soft)">Select a month above.</td></tr>'; return; }
+  if(!API_URL){ body.innerHTML = '<tr><td colspan="10" style="color:var(--ink-soft)">Connect API_URL to use Production Balancing.</td></tr>'; return; }
+
+  const records = (window._allRecords||[]).filter(r=> monthKeyOf(r.date)===monthKey);
+  const types = [...new Set(records.map(r=>r.type).filter(Boolean))].sort();
+
+  if(!types.length){
+    body.innerHTML = `<tr><td colspan="10" style="color:var(--ink-soft)">No saved records found for ${monthKey} — nothing to balance yet.</td></tr>`;
+    return;
+  }
+
+  body.innerHTML = types.map(type=>{
+    const cur = computeCurrentGradeTotals(records, type, monthKey);
+    const existing = (window._balancingData||[]).find(b=> b.type===type && b.month===monthKey);
+    const rowId = `bal-${type.replace(/[^A-Za-z0-9]/g,'_')}`;
+    const inp = (key, val) => `<input type="number" step="0.01" class="bal-input" id="${rowId}-${key}" value="${val!=null && val!=='' ? val : ''}" placeholder="—">`;
+    return `<tr>
+      <td class="desc">${type}</td>
+      <td class="num">${cur.g1.toFixed(2)}</td>
+      <td>${inp('g1', existing ? existing.barcoded1st : '')}</td>
+      <td class="num">${(cur.g2+cur.g2subs).toFixed(2)}</td>
+      <td>${inp('g2', existing ? existing.barcoded2nd : '')}</td>
+      <td class="num">${(cur.cGrade+cur.cSubs).toFixed(2)}</td>
+      <td>${inp('cGrade', existing ? existing.barcodedCGrade : '')}</td>
+      <td class="num">${(cur.dam+cur.damSubs).toFixed(2)}</td>
+      <td>${inp('dam', existing ? existing.barcodedDamage : '')}</td>
+      <td><button type="button" class="btn ghost" style="padding:6px 12px; font-size:11.5px;" data-bal-save="${type}">Save</button></td>
+    </tr>`;
+  }).join('');
+
+  body.querySelectorAll('[data-bal-save]').forEach(btn=>{
+    btn.addEventListener('click', ()=> saveBalancingRow(btn.dataset.balSave, monthKey));
+  });
+}
+
+async function saveBalancingRow(type, monthKey){
+  const rowId = `bal-${type.replace(/[^A-Za-z0-9]/g,'_')}`;
+  const val = (key) => {
+    const v = document.getElementById(`${rowId}-${key}`).value;
+    return v === '' ? null : +v;
+  };
+  const entry = {
+    month: monthKey, type,
+    barcoded1st: val('g1'), barcoded2nd: val('g2'),
+    barcodedCGrade: val('cGrade'), barcodedDamage: val('dam')
+  };
+
+  const note = document.getElementById('balancingNote');
+  note.textContent = `Saving ${type}…`;
+  note.style.color = 'var(--ink-soft)';
+
+  if(!API_URL){ note.textContent = 'API_URL not set — cannot save.'; note.style.color = 'var(--terracotta)'; return; }
+
+  try{
+    const res = await fetch(API_URL, {
+      method:'POST',
+      headers:{ 'Content-Type':'text/plain' },
+      body: JSON.stringify({ action:'saveBalancing', entry })
+    });
+    const data = await res.json();
+    if(data.success){
+      window._balancingData = (window._balancingData||[]).filter(b=> !(b.type===type && b.month===monthKey));
+      window._balancingData.push(entry);
+      note.textContent = `Saved ${type} for ${monthKey}. Dashboard/Analysis figures for this Type will now reflect the correction.`;
+      note.style.color = 'var(--good)';
+      applyFilters();
+      applyAnalysisFilters();
+    } else {
+      note.textContent = `Save failed: ${data.error||'unknown error'}`;
+      note.style.color = 'var(--terracotta)';
+    }
+  }catch(err){
+    note.textContent = `Save failed: ${err.message}`;
+    note.style.color = 'var(--terracotta)';
+  }
+}
+
+/* =====================================================================
    ANALYSIS TAB — same Defect Log format as Entry tab, but showing
    cumulative SQM (not pcs) from filtered saved records, with only
    defects that actually have recorded SQM displayed.
@@ -1771,7 +1911,7 @@ async function loadRecords(){
 async function initAnalysis(){
   const status = document.getElementById('analysisFilterStatus');
   status.textContent = 'Loading saved records…';
-  const list = await fetchAllRecords();
+  const [list] = await Promise.all([fetchAllRecords(), fetchBalancingData()]);
   status.textContent = API_URL ? `${list.length} record(s) loaded.` : 'API_URL not set — connect it to analyze saved records.';
   applyAnalysisFilters();
 }
@@ -1917,6 +2057,12 @@ function computeFOQAFormat(list){
       }
     });
   });
+
+  const balDeltas = computeBalancingDeltasForList(list);
+  summarySum.g1 += balDeltas.g1;
+  summarySum.g2 += balDeltas.g2;
+  summarySum.cGrade += balDeltas.cGrade;
+  summarySum.dam += balDeltas.dam;
 
   const grand = Object.values(summarySum).reduce((a,b)=>a+b,0);
   const secondGroup = summarySum.g2 + summarySum.g2diag + summarySum.g2warp;
@@ -2078,7 +2224,7 @@ async function getAIRecordsInRange(fromISO, toISO){
 async function initDashboard(){
   const status = document.getElementById('filterStatus');
   status.textContent = 'Loading saved records…';
-  const list = await fetchAllRecords();
+  const [list] = await Promise.all([fetchAllRecords(), fetchBalancingData()]);
   status.textContent = API_URL ? `${list.length} record(s) loaded.` : 'API_URL not set — connect it to analyze saved records.';
   applyFilters();
 }
@@ -2119,6 +2265,91 @@ function applyFilters(){
   renderChartsFromAggregate(agg);
 }
 
+/* =====================================================================
+   PRODUCTION BALANCING — month-end reconciliation between "sorted"
+   production (what's been entered via defect analysis) and "barcoded"
+   production (the accounting/SAP figure). Stored separately from Records
+   so it never appears as a fake zero-defect entry in Records/Pareto/
+   defect-level Quality Insights analyses. Its correction (the gap
+   between sorted and barcoded, per grade) is injected directly into
+   aggregateRecords/computeFOQAFormat's summarySum BEFORE grand/percentage
+   math runs, so every KPI, chart share, and Section 5 figure that reads
+   from those functions stays internally consistent automatically.
+   Only the bare 1st/2nd/C Grade/Damages line items are corrected — their
+   defect sub-categories (Diagonal, Warpage, Size Out, Sorting Damages,
+   etc.) are left exactly as recorded, since those are individually
+   verified and the barcode gap is unattributed to any specific defect.
+===================================================================== */
+function monthKeyOf(dateISO){
+  return (dateISO||'').slice(0,7); // "YYYY-MM"
+}
+
+async function fetchBalancingData(force){
+  if(window._balancingData && !force) return window._balancingData;
+  if(!API_URL){ window._balancingData = []; return []; }
+  try{
+    const res = await fetch(`${API_URL}?action=getBalancing`);
+    const data = await res.json();
+    window._balancingData = data.balancing || [];
+  }catch(err){
+    console.error('Could not load Production Balancing data:', err);
+    window._balancingData = window._balancingData || [];
+  }
+  return window._balancingData;
+}
+
+// Sums the current cumulative bare-line and sub-category SQM for one
+// Type within one month, from whatever records are passed in.
+function computeCurrentGradeTotals(records, type, monthKey){
+  const subset = records.filter(r=> r.type===type && monthKeyOf(r.date)===monthKey);
+  const t = { g1:0, g2:0, g2subs:0, cGrade:0, cSubs:0, dam:0, damSubs:0 };
+  subset.forEach(rec=>{
+    const s = rec.summary || {};
+    t.g1 += (+s.g1||0);
+    t.g2 += (+s.g2||0);
+    t.g2subs += (+s.g2diag||0) + (+s.g2warp||0);
+    t.cGrade += (+s.cGrade||0);
+    t.cSubs += (+s.cSize||0) + (+s.cDiag||0) + (+s.cWarp||0);
+    t.dam += (+s.dam||0);
+    t.damSubs += (+s.damSort||0) + (+s.damPolish||0) + (+s.damLiner||0) + (+s.damPlanner||0) + (+s.damKiln||0);
+  });
+  return t;
+}
+
+// Aggregates balancing corrections (delta per bare category) across every
+// (Type, Month) combination present in `list`, using whatever balancing
+// entries are cached. Returns the total delta to add to summarySum.
+function computeBalancingDeltasForList(list){
+  const deltas = { g1:0, g2:0, cGrade:0, dam:0 };
+  const balancing = window._balancingData || [];
+  if(!balancing.length || !list.length) return deltas;
+
+  const pairs = new Set();
+  list.forEach(r=>{ if(r.type && r.date) pairs.add(r.type+'|'+monthKeyOf(r.date)); });
+
+  pairs.forEach(pairKey=>{
+    const [type, monthKey] = pairKey.split('|');
+    const entry = balancing.find(b=> b.type===type && b.month===monthKey);
+    if(!entry) return;
+    const cur = computeCurrentGradeTotals(list, type, monthKey);
+
+    if(entry.barcoded1st !== '' && entry.barcoded1st != null){
+      deltas.g1 += (+entry.barcoded1st) - cur.g1;
+    }
+    if(entry.barcoded2nd !== '' && entry.barcoded2nd != null){
+      deltas.g2 += ((+entry.barcoded2nd) - cur.g2subs) - cur.g2;
+    }
+    if(entry.barcodedCGrade !== '' && entry.barcodedCGrade != null){
+      deltas.cGrade += ((+entry.barcodedCGrade) - cur.cSubs) - cur.cGrade;
+    }
+    if(entry.barcodedDamage !== '' && entry.barcodedDamage != null){
+      deltas.dam += ((+entry.barcodedDamage) - cur.damSubs) - cur.dam;
+    }
+  });
+
+  return deltas;
+}
+
 function aggregateRecords(list){
   const summarySum = {}; Object.keys(summary).forEach(k=>summarySum[k]=0);
   const defectSum = DEFECTS.map(name=>({ name, c:0, f:0, i:0 }));
@@ -2135,6 +2366,16 @@ function aggregateRecords(list){
       }
     });
   });
+
+  // Apply Production Balancing corrections (if any exist for the Types/
+  // months covered by this list) directly into the bare category totals
+  // — before grand/percentages are computed — so everything downstream
+  // (KPIs, pie/pareto shares, Section 5) stays consistent automatically.
+  const balDeltas = computeBalancingDeltasForList(list);
+  summarySum.g1 += balDeltas.g1;
+  summarySum.g2 += balDeltas.g2;
+  summarySum.cGrade += balDeltas.cGrade;
+  summarySum.dam += balDeltas.dam;
 
   const grand = Object.values(summarySum).reduce((a,b)=>a+b,0);
   const cGroup = summarySum.cGrade;
