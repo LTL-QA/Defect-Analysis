@@ -426,6 +426,8 @@
   .modal-card p b{ color:var(--teal-deep); }
   .modal-actions{ display:flex; gap:10px; justify-content:flex-end; }
   .modal-actions .btn{ min-width:110px; }
+
+  #aiYesterdayReview [hidden]{ display:none !important; }
 </style>
 </head>
 <body>
@@ -2403,10 +2405,10 @@ function applyAnalysisFilters(){
   renderFOQAFormat(foqaData);
 }
 
-function renderAnalysisSummary(agg, meta){
-  const leftBody = document.getElementById('analysisLeftBody');
-  const rightBody = document.getElementById('analysisRightBody');
-  window._latestAnalysisSummary = { agg, meta };
+function renderAnalysisSummary(agg, meta, targets){
+  const leftBody = document.getElementById(targets ? targets.left : 'analysisLeftBody');
+  const rightBody = document.getElementById(targets ? targets.right : 'analysisRightBody');
+  if(!targets) window._latestAnalysisSummary = { agg, meta };
 
   if(!agg || (!agg.recordCount && !agg.hasRecordedDefects)){
     const noData = '<tr><td colspan="2" style="color:var(--ink-soft); text-align:center; padding:20px;">No matching data for the current filter selection.</td></tr>';
@@ -2439,7 +2441,7 @@ function renderAnalysisSummary(agg, meta){
   leftHtml += infoRow('Size', meta.size);
   leftHtml += infoRow('Lot', meta.lot);
   leftHtml += infoRow('Sorting Line', meta.sortingLine);
-  leftHtml += infoRow('Production Basis', productionBasisLabel());
+  leftHtml += infoRow('Production Basis', targets ? targets.productionBasisLabel : productionBasisLabel());
   leftHtml += infoRow('Production (SQM)', agg.grand.toFixed(2));
   leftHtml += spacer;
 
@@ -3029,6 +3031,7 @@ async function renderAIDateRangeResult(fromISO, toISO, label, isYesterday){
     (damItems.length ? damItems.map(x=>subItem(x.name, pct(x.damPct))).join('') : emptyNote('No Damage defects in this period.'));
 
   body.innerHTML = `
+    ${isYesterday ? `<div id="aiYesterdayReview" style="margin-bottom:16px;"></div>` : ''}
     <div class="ai-summary-line">${summaryLine}</div>
     ${impactHTML}
     <div class="chart-box" style="height:320px; margin-bottom:18px;"><canvas id="aiParetoChart"></canvas></div>
@@ -3036,6 +3039,8 @@ async function renderAIDateRangeResult(fromISO, toISO, label, isYesterday){
       <div class="summary-table-inner"><table class="summary-table"><tbody>${leftRows}</tbody></table></div>
       <div class="summary-table-inner"><table class="summary-table"><tbody>${rightRows}</tbody></table></div>
     </div>`;
+
+  if(isYesterday) renderYesterdayDefectReview(records, fromISO);
 
   const ctx = document.getElementById('aiParetoChart');
   new Chart(ctx, {
@@ -3049,6 +3054,70 @@ async function renderAIDateRangeResult(fromISO, toISO, label, isYesterday){
         datalabels:{ display: ctx => ctx.dataset.data[ctx.dataIndex] > 0, color:'#fff', font:{size:9,weight:'700'}, anchor:'center', align:'center', formatter: v=>v+'%' } },
       scales:{ x:{ stacked:true, ticks:{ autoSkip:false, maxRotation:60, minRotation:40, font:{size:9} } }, y:{ stacked:true, ticks:{ callback:v=>v+'%' } } } }
   });
+}
+
+/* Yesterday review reuses the Defect Summary renderer without changing tab filters. */
+function groupYesterdayDefectRecords(records){
+  const groups = new Map();
+  for(const record of records){
+    const type = String(record.type || 'Unknown Type');
+    const line = String(record.sortingLine || 'Unspecified Sorting Line');
+    const key = JSON.stringify([type, line]);
+    if(!groups.has(key)) groups.set(key, {type, line, records:[]});
+    groups.get(key).records.push(record);
+  }
+  const result = [...groups.values()].sort((a,b)=>a.type.localeCompare(b.type) || a.line.localeCompare(b.line));
+  for(const group of result){
+    const multipleLines = result.some(other=>other.type === group.type && other.line !== group.line);
+    group.label = multipleLines ? `${group.type} - ${group.line}` : group.type;
+  }
+  return result;
+}
+
+function renderYesterdayDefectReview(records, day){
+  const host = document.getElementById('aiYesterdayReview');
+  if(!host) return;
+  host.innerHTML = `
+    <button type="button" class="btn primary" id="aiYesterdayReviewToggle" aria-expanded="false" aria-controls="aiYesterdayReviewPanel">Check yesterday all defect analysis</button>
+    <div id="aiYesterdayReviewPanel" hidden style="margin-top:12px;">
+      <div id="aiYesterdayTypeButtons" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;"></div>
+      <div id="aiYesterdaySelection" aria-live="polite">Select a type to view its yesterday Defect Summary.</div>
+      <div id="aiYesterdaySummary" hidden class="analysis-grid" style="margin-top:12px;">
+        <div class="summary-table-inner"><table class="summary-table"><tbody id="aiYesterdayLeftBody"></tbody></table></div>
+        <div class="summary-table-inner"><table class="summary-table"><tbody id="aiYesterdayRightBody"></tbody></table></div>
+      </div>
+    </div>`;
+  const toggle = document.getElementById('aiYesterdayReviewToggle');
+  const panel = document.getElementById('aiYesterdayReviewPanel');
+  toggle.addEventListener('click', ()=>{
+    panel.hidden = !panel.hidden;
+    toggle.setAttribute('aria-expanded', String(!panel.hidden));
+  });
+  const buttons = document.getElementById('aiYesterdayTypeButtons');
+  const escape = value => String(value).replace(/[&<>"']/g, ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+  for(const group of groupYesterdayDefectRecords(records)){
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'btn ghost';
+    button.textContent = group.label;
+    button.setAttribute('aria-pressed', 'false');
+    button.addEventListener('click', ()=>{
+      for(const other of buttons.children){
+        other.className = other === button ? 'btn primary' : 'btn ghost';
+        other.setAttribute('aria-pressed', String(other === button));
+      }
+      const values = key => [...new Set(group.records.map(r=>String(r[key] || '').trim()).filter(Boolean))].join(', ') || '—';
+      const meta = {date:formatDateDMY(day), type:group.type, sortingLine:group.line,
+        gl:values('gl'), kiln:values('kiln'), shift:values('shift'), texture:values('texture'), size:values('size'), lot:values('lot')};
+      Object.keys(meta).forEach(key=>meta[key]=escape(meta[key]));
+      document.getElementById('aiYesterdaySelection').textContent = `${group.label} — Defect Summary · ${group.records.length} saved record(s) · ${formatDateDMY(day)}`;
+      document.getElementById('aiYesterdaySummary').hidden = false;
+      renderAnalysisSummary(aggregateRecords(group.records, 'sorter'), meta, {
+        left:'aiYesterdayLeftBody', right:'aiYesterdayRightBody', productionBasisLabel:'Sorter Production'
+      });
+    });
+    buttons.appendChild(button);
+  }
 }
 
 /* ---- Most-impacted Glazing Line / lowest-yield Type helpers ---- */
