@@ -628,6 +628,7 @@
 
     <div class="actions">
       <span id="saveStatus"></span>
+      <button class="btn ghost" id="btnCancelEdit" style="display:none;">Cancel Edit</button>
       <button class="btn ghost" id="btnClear">Clear Form</button>
       <button class="btn ghost" id="btnCSV">Export CSV</button>
       <button class="btn primary" id="btnSave">Save Record</button>
@@ -1242,6 +1243,9 @@ function wireEvents(){
     });
   });
 
+  document.getElementById('btnCancelEdit').addEventListener('click', cancelRecordEdit);
+  document.getElementById('view-entry').addEventListener('input', ()=>{ if(!recordSaveInProgress) document.getElementById('btnSave').disabled=false; });
+  document.getElementById('view-entry').addEventListener('change', ()=>{ if(!recordSaveInProgress) document.getElementById('btnSave').disabled=false; });
   document.getElementById('btnClear').addEventListener('click', clearForm);
   document.getElementById('btnCSV').addEventListener('click', exportCSV);
   document.getElementById('btnSave').addEventListener('click', saveRecord);
@@ -1821,7 +1825,84 @@ function renderCharts(data){
 /* =====================================================================
    ACTIONS: clear / export / save / load
 ===================================================================== */
+let editingRecord = null;
+let recordSaveInProgress = false;
+
+// Reconstruct older PCS values from their saved SQM values where necessary.
+function editableRecordState(rec){
+  if(!rec.id) throw new Error('This older record has no unique ID and cannot be safely edited.');
+  if(!rec.summary || !Object.keys(rec.summary).length || !Array.isArray(rec.defects)) throw new Error('This record does not contain the saved defect and grade detail needed for editing.');
+  const factor = sizeToSqm(rec.size);
+  if(!factor) throw new Error('The saved tile size cannot be converted to SQM.');
+  const pcs = {};
+  for(const key of Object.keys(summaryPcs)) pcs[key] = rec.summaryPcs && rec.summaryPcs[key] != null ? +rec.summaryPcs[key] : (+rec.summary[key] || 0)/factor;
+  const sums = keys=>keys.reduce((sum,key)=>sum+(+rec.summary[key]||0),0)/factor;
+  const totals = {
+    sellable:rec.summaryPcs && rec.summaryPcs.totalSellablePcs != null ? +rec.summaryPcs.totalSellablePcs : sums(['g1','g2','g2diag','g2warp']),
+    cGrade:rec.summaryPcs && rec.summaryPcs.totalCGradePcs != null ? +rec.summaryPcs.totalCGradePcs : sums(['cGrade','cSize','cDiag','cWarp']),
+    damages:rec.summaryPcs && rec.summaryPcs.totalDamagesPcs != null ? +rec.summaryPcs.totalDamagesPcs : sums(['dam','damSort','damPolish','damLiner','damPlanner','damKiln'])
+  };
+  const defects = rec.defects.map(d=>{
+    const index=DEFECTS.indexOf(d.name);
+    if(index<0) throw new Error('Cannot edit: the saved defect "'+d.name+'" is missing from the current defect list.');
+    return {index, c:d.qty2nd != null ? +d.qty2nd : (+d.sqm2nd||0)/factor,
+      f:d.qtyC != null ? +d.qtyC : (+d.sqmC||0)/factor, i:d.qtyDam != null ? +d.qtyDam : (+d.sqmDam||0)/factor};
+  });
+  if([...Object.values(pcs),...Object.values(totals),...defects.flatMap(d=>[d.c,d.f,d.i])].some(v=>!Number.isFinite(v)||v<0)) throw new Error('The saved record contains invalid quantities.');
+  return {factor,pcs,totals,defects};
+}
+
+function editSavedRecord(rec){
+  if(recordSaveInProgress) return;
+  let state;
+  try { state=editableRecordState(rec); } catch(err){ alert(err.message); return; }
+  if((editingRecord || activeDefects.length || Object.values(subTotalsPcs).some(v=>v!==0)) && !confirm('Load this saved record? This replaces the values currently in the entry form.')) return;
+  editingRecord = JSON.parse(JSON.stringify(rec));
+  const fields={jDate:'date',jType:'type',jTexture:'texture',jSize:'size',jGL:'gl',jKiln:'kiln',jLot:'lot',jShift:'shift',jSortingLine:'sortingLine'};
+  for(const [id,key] of Object.entries(fields)){
+    const el=document.getElementById(id), value=rec[key] || '';
+    if(el.tagName==='SELECT' && value && !Array.from(el.options).some(o=>o.value===value)) el.add(new Option(value,value));
+    el.value=value;
+  }
+  document.querySelectorAll('#jSortingLineGroup .sl-btn').forEach(button=>button.classList.toggle('active',button.dataset.sl===rec.sortingLine));
+  sqmPerPc=state.factor;
+  Object.assign(summaryPcs,state.pcs);
+  Object.assign(subTotalsPcs,state.totals);
+  rows.forEach(r=>{r.c=0;r.f=0;r.i=0;});
+  activeDefects=state.defects.filter(d=>d.c>0 || d.f>0 || d.i>0).map(d=>d.index);
+  state.defects.forEach(d=>Object.assign(rows[d.index],{c:d.c,f:d.f,i:d.i}));
+  document.querySelectorAll('.pcsval[data-key], .pcsval[data-subtotal]').forEach(input=>{
+    input.value=input.dataset.key ? summaryPcs[input.dataset.key] : subTotalsPcs[input.dataset.subtotal];
+  });
+  buildDefectRows();
+  recalcGradeSummaryFromPcs();
+  document.getElementById('btnSave').textContent='Save Changes';
+  document.getElementById('btnSave').disabled=false;
+  document.getElementById('btnCancelEdit').style.display='';
+  document.getElementById('saveStatus').textContent='Editing '+rec.type+' · '+formatDateDMY(rec.date)+' — Save Changes updates this record.';
+  document.querySelector('.tab-btn[data-view="entry"]').click();
+  document.getElementById('view-entry').scrollIntoView({block:'start',behavior:'smooth'});
+}
+
+function cancelRecordEdit(){
+  if(recordSaveInProgress) return;
+  if(!confirm('Exit editing and clear the entry quantities?')) return;
+  editingRecord=null;
+  rows.forEach(r=>{r.c=0;r.f=0;r.i=0;});
+  activeDefects=[];
+  Object.keys(summaryPcs).forEach(key=>summaryPcs[key]=0);
+  Object.keys(subTotalsPcs).forEach(key=>subTotalsPcs[key]=0);
+  document.querySelectorAll('.pcsval[data-key], .pcsval[data-subtotal]').forEach(input=>input.value='');
+  buildDefectRows();
+  recalcGradeSummaryFromPcs();
+  document.getElementById('btnSave').textContent='Save Record';
+  document.getElementById('btnSave').disabled=false;
+  document.getElementById('btnCancelEdit').style.display='none';
+  document.getElementById('saveStatus').textContent='Editing cancelled. Ready for a new record.';
+}
+
 function clearForm(){
+  if(recordSaveInProgress) return;
   if(!confirm('Clear all entered quantities and values?')) return;
   rows.forEach(r=>{ r.c=0; r.f=0; r.i=0; });
   activeDefects = [];
@@ -1841,7 +1922,7 @@ function generateRecordId(){
 function gatherRecord(){
   const { sellablePct, cPct, damPct, grand } = window._latest;
   return {
-    id: generateRecordId(),
+    id: editingRecord ? editingRecord.id : generateRecordId(),
     date: document.getElementById('jDate').value,
     type: document.getElementById('jType').value,
     texture: document.getElementById('jTexture').value,
@@ -1889,6 +1970,7 @@ function exportCSV(){
 }
 
 async function saveRecord(){
+  if(recordSaveInProgress) return;
   const status = document.getElementById('saveStatus');
   const btn = document.getElementById('btnSave');
   const typeInput = document.getElementById('jType');
@@ -1906,20 +1988,30 @@ async function saveRecord(){
     return;
   }
   btn.disabled = true;
-  status.textContent = 'Saving…';
-  const rec = gatherRecord();
+  status.textContent = editingRecord ? 'Saving changes…' : 'Saving…';
+  const originalRecord = editingRecord;
+  const rec = originalRecord ? {...originalRecord, ...gatherRecord()} : gatherRecord();
+  recordSaveInProgress = true;
+  const entryControls = [...document.querySelectorAll('#view-entry input, #view-entry select, #view-entry button')].map(el=>({el, disabled:el.disabled}));
+  entryControls.forEach(({el})=>el.disabled=true);
+  let saveSucceeded = false;
   try{
     const res = await fetch(API_URL, {
       method:'POST',
       headers:{ 'Content-Type':'text/plain' },
-      body: JSON.stringify({ action:'addRecord', record: rec })
+      body: JSON.stringify({ action:originalRecord ? 'updateRecord' : 'addRecord', record: rec, ...(originalRecord ? {originalRecord} : {}) })
     });
     const data = await res.json();
     if(data.success){
-      status.textContent = 'Saved to sheet ✓ — button will re-enable once you change the Defect Log or Grade Summary.';
+      saveSucceeded = true;
+      status.textContent = originalRecord ? 'Changes saved ✓ — the existing record was updated.' : 'Saved to sheet ✓ — button will re-enable once you change the Defect Log or Grade Summary.';
       // Reflect the new record immediately everywhere, without waiting for "Refresh from Sheet"
-      if(window._allRecords) window._allRecords.unshift(rec);
+      if(originalRecord){
+        window._allRecords = (window._allRecords || []).map(r=>String(r.id)===String(rec.id) ? rec : r);
+        editingRecord = JSON.parse(JSON.stringify(rec));
+      } else if(window._allRecords) window._allRecords.unshift(rec);
       else window._allRecords = [rec];
+      document.dispatchEvent(new Event('typeSuggestionsChanged'));
       renderRecordsTable(window._allRecords);
       applyFilters();
       applyAnalysisFilters();
@@ -1931,6 +2023,10 @@ async function saveRecord(){
   }catch(err){
     status.textContent = 'Save failed: '+err.message;
     btn.disabled = false;
+  } finally {
+    entryControls.forEach(({el,disabled})=>el.disabled=disabled);
+    btn.disabled=saveSucceeded;
+    recordSaveInProgress = false;
   }
 }
 
@@ -1954,7 +2050,10 @@ function renderRecordsTable(list){
   body.innerHTML = visibleRecords.map((r,idx)=>`
     <tr><td>${r.date||''}</td><td>${r.type||''}</td><td>${r.texture||''}</td><td>${r.size||''}</td><td>${r.gl||''}</td><td>${r.kiln||''}</td><td>${r.lot||''}</td><td>${r.shift||''}</td>
     <td>${r.grandTotalSqm ?? ''}</td><td>${r.sellablePct ?? ''}%</td><td>${r.cGradePct ?? ''}%</td><td>${r.damagePct ?? ''}%</td>
-    <td><button class="btn ghost" style="padding:5px 10px; font-size:11.5px; color:var(--terracotta); border-color:var(--terracotta);" onclick="deleteSavedRecord('${r.id||''}', ${idx})">Delete</button></td></tr>`).join('');
+    <td><button type="button" class="btn ghost record-edit-btn" style="padding:5px 10px;font-size:11.5px;margin-bottom:4px;" data-record-index="${idx}">Edit</button> <button class="btn ghost" style="padding:5px 10px; font-size:11.5px; color:var(--terracotta); border-color:var(--terracotta);" onclick="deleteSavedRecord('${r.id||''}', ${idx})">Delete</button></td></tr>`).join('');
+  body.querySelectorAll('.record-edit-btn').forEach(button=>{
+    button.addEventListener('click', ()=>editSavedRecord(visibleRecords[+button.dataset.recordIndex]));
+  });
 }
 
 async function deleteSavedRecord(id, idx){
