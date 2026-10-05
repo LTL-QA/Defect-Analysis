@@ -106,6 +106,7 @@
     background:#fff; border:1px solid var(--panel-line); border-radius:8px;
     box-shadow:0 6px 18px rgba(10,40,40,0.12); overflow:hidden; display:none;
   }
+  #typeSuggest, #filterTypeSuggest, #analysisTypeSuggest, #addProdTypeSuggest, #aiVarTypeSuggest{ max-height:240px; overflow-y:auto; }
   .suggest-list.show{ display:block; }
   .suggest-item{
     padding:8px 10px; font-family:var(--font-mono); font-size:12.5px; cursor:pointer;
@@ -640,7 +641,7 @@
       <div class="jobgrid filter-grid">
         <div class="field"><label>Date From</label><input type="date" id="fDateFrom"></div>
         <div class="field"><label>Date To</label><input type="date" id="fDateTo"></div>
-        <div class="field" style="position:relative;"><label>Type</label><input type="text" id="fType" autocomplete="off" placeholder="Any — start typing"><div id="filterTypeSuggest" class="suggest-list"></div></div>
+        <div class="field" style="position:relative;"><label>Type</label><input type="text" id="fType" autocomplete="off" placeholder="Any — e.g. *PVG--3-0450A58" title="Use * to match any characters. Example: *PVG--3-0450A58 combines matching types."><div id="filterTypeSuggest" class="suggest-list"></div></div>
         <div class="field"><label>Texture</label><select id="fTexture">
           <option value="">All Textures</option>
           <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>
@@ -732,7 +733,7 @@
       <div class="jobgrid filter-grid">
         <div class="field"><label>Date From</label><input type="date" id="aDateFrom"></div>
         <div class="field"><label>Date To</label><input type="date" id="aDateTo"></div>
-        <div class="field" style="position:relative;"><label>Type</label><input type="text" id="aType" autocomplete="off" placeholder="Any — start typing"><div id="analysisTypeSuggest" class="suggest-list"></div></div>
+        <div class="field" style="position:relative;"><label>Type</label><input type="text" id="aType" autocomplete="off" placeholder="Any — e.g. *PVG--3-0450A58" title="Use * to match any characters. Example: *PVG--3-0450A58 combines matching types."><div id="analysisTypeSuggest" class="suggest-list"></div></div>
         <div class="field"><label>Texture</label><select id="aTexture">
           <option value="">All Textures</option>
           <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>
@@ -1118,6 +1119,7 @@ async function syncMasterTypeList(){
       data.types.forEach(t=>{
         if(t && !TYPE_CODES.some(x=>x.toUpperCase()===t.toUpperCase())) TYPE_CODES.push(t);
       });
+      document.dispatchEvent(new Event('typeSuggestionsChanged'));
     }
   }catch(err){
     console.error('Could not sync master type list:', err);
@@ -1359,6 +1361,33 @@ function wireDefectSearch(){
   });
 }
 
+// SAP-style * matches any number of characters; other characters are literal.
+// Plain searches retain the existing partial-code matching behavior.
+function matchesTypeFilter(type, query){
+  const value = String(type || '').trim().toUpperCase();
+  const pattern = String(query || '').trim().toUpperCase();
+  if(!pattern) return true;
+  if(!pattern.includes('*')) return value.includes(pattern);
+  const escaped = pattern.split('*').map(part=>part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*');
+  return new RegExp('^' + escaped + '$').test(value);
+}
+
+// Every Type input shares master codes and types present in saved records.
+function getTypeSuggestions(query){
+  const q = String(query || '').trim().toUpperCase();
+  if(!q) return [];
+  const unique = new Map();
+  const sources = [...TYPE_CODES, ...(window._allRecords || []).map(r=>r.type)];
+  for(const value of sources){
+    const type = String(value || '').trim();
+    if(type && !unique.has(type.toUpperCase())) unique.set(type.toUpperCase(), type);
+  }
+  return [...unique.values()].filter(t=>matchesTypeFilter(t,q)).sort((a,b)=>{
+    const au=a.toUpperCase(), bu=b.toUpperCase();
+    return Number(bu===q)-Number(au===q) || Number(bu.startsWith(q))-Number(au.startsWith(q)) || a.localeCompare(b);
+  });
+}
+
 function setupTypeAutocomplete(inputId, listId, onChange){
   const input = document.getElementById(inputId);
   const list = document.getElementById(listId);
@@ -1366,17 +1395,28 @@ function setupTypeAutocomplete(inputId, listId, onChange){
 
   function render(){
     if(!matches.length){ list.classList.remove('show'); list.innerHTML=''; return; }
-    list.innerHTML = matches.map((m,i)=>`<div class="suggest-item${i===hiIdx?' hi':''}" data-i="${i}">${m}</div>`).join('');
+    list.replaceChildren();
+    matches.forEach((m,i)=>{
+      const item = document.createElement('div');
+      item.className = 'suggest-item' + (i===hiIdx ? ' hi' : '');
+      item.dataset.i = i;
+      item.textContent = m;
+      list.appendChild(item);
+    });
     list.classList.add('show');
+    if(hiIdx>=0) list.children[hiIdx].scrollIntoView({block:'nearest'});
   }
-  function update(){
+  function update(notify = true){
     const q = input.value.trim().toUpperCase();
     hiIdx = -1;
-    matches = q ? TYPE_CODES.filter(t=>t.toUpperCase().includes(q)).slice(0,4) : [];
+    matches = getTypeSuggestions(q);
     render();
-    onChange();
+    if(notify) onChange();
   }
 
+  document.addEventListener('typeSuggestionsChanged', ()=>{
+    if(document.activeElement === input) update(false);
+  });
   input.addEventListener('input', update);
   input.addEventListener('focus', update);
   input.addEventListener('keydown', e=>{
@@ -1476,6 +1516,7 @@ async function saveNewTypeToMasterList(val){
     const data = await res.json();
     if(data.success){
       if(!TYPE_CODES.some(t=>t.toUpperCase()===val.toUpperCase())) TYPE_CODES.push(val);
+      document.dispatchEvent(new Event('typeSuggestionsChanged'));
       alert(`"${val}" has been added to the master Type list.`);
     } else {
       alert('Could not save the new Type: '+(data.error||'unknown error'));
@@ -1508,7 +1549,7 @@ function setSelectIfOption(selectId, value){
 
 function autoFillTextureSizeFromType(prefix){
   const t = document.getElementById(prefix+'Type').value.trim();
-  if(!t) return;
+  if(!t || t.includes('*')) return;
   setSelectIfOption(prefix+'Size', deriveSize(t));
   setSelectIfOption(prefix+'Texture', deriveTexture(t));
 }
@@ -2386,7 +2427,7 @@ function applyAnalysisFilters(){
   const filtered = list.filter(r=>{
     if(f.from && r.date < f.from) return false;
     if(f.to && r.date > f.to) return false;
-    if(f.type && !(r.type||'').toUpperCase().includes(f.type)) return false;
+    if(!matchesTypeFilter(r.type, f.type)) return false;
     if(f.texture && r.texture !== f.texture) return false;
     if(f.size && r.size !== f.size) return false;
     if(f.gl && r.gl !== f.gl) return false;
@@ -2640,6 +2681,7 @@ async function fetchAllRecords(force){
   const res = await fetch(`${API_URL}?action=getRecords`);
   const data = await res.json();
   window._allRecords = data.records || [];
+  document.dispatchEvent(new Event('typeSuggestionsChanged'));
   return window._allRecords;
 }
 
@@ -2736,7 +2778,7 @@ function applyFilters(){
   const filtered = list.filter(r=>{
     if(f.from && r.date < f.from) return false;
     if(f.to && r.date > f.to) return false;
-    if(f.type && !(r.type||'').toUpperCase().includes(f.type)) return false;
+    if(!matchesTypeFilter(r.type, f.type)) return false;
     if(f.texture && r.texture !== f.texture) return false;
     if(f.size && r.size !== f.size) return false;
     if(f.gl && r.gl !== f.gl) return false;
@@ -3282,7 +3324,7 @@ function renderAIVariationSetup(){
     <div class="jobgrid filter-grid" style="margin-bottom:16px;">
       <div class="field" style="position:relative;">
         <label>Type</label>
-        <input type="text" id="aiVarType" autocomplete="off" placeholder="Any — start typing">
+        <input type="text" id="aiVarType" autocomplete="off" placeholder="Any — e.g. *PVG--3-0450A58" title="Use * to match any characters. Example: *PVG--3-0450A58 combines matching types.">
         <div id="aiVarTypeSuggest" class="suggest-list"></div>
       </div>
       <div class="field"><label>Texture</label><select id="aiVarTexture">
@@ -3369,7 +3411,7 @@ async function renderAIVariationChart(itemName){
 
   const f = getAIVariationFilters();
   const records = (await getAIRecordsInRange(from, to)).filter(r=>{
-    if(f.type && !(r.type||'').toUpperCase().includes(f.type)) return false;
+    if(!matchesTypeFilter(r.type, f.type)) return false;
     if(f.texture && r.texture !== f.texture) return false;
     if(f.size && r.size !== f.size) return false;
     if(f.gl && r.gl !== f.gl) return false;
