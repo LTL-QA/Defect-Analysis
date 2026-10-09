@@ -3520,29 +3520,15 @@ async function renderAIVariationChart(itemName){
     if(f.sortingLine && r.sortingLine !== f.sortingLine) return false;
     return true;
   });
-  const safeDiv = (a,b)=> b ? a/b : 0;
-
   const cSeries = [], damSeries = [];
   days.forEach(day=>{
     const dayRecords = records.filter(r=>r.date===day);
-    let dayGrand = 0, cSQM = 0, damSQM = 0;
-
-    dayRecords.forEach(rec=>{
-      const s = rec.summary || {};
-      dayGrand += Object.values(s).reduce((a,v)=>a+(+v||0), 0);
-
-      if(item.type === 'defect'){
-        const d = (rec.defects||[]).find(x=>x.name===item.name);
-        if(d){ cSQM += (+d.sqmC||0); damSQM += (+d.sqmDam||0); }
-      } else if(item.type === 'c-sub'){
-        cSQM += (+s[item.key]||0);
-      } else if(item.type === 'dam-sub'){
-        damSQM += (+s[item.key]||0);
-      }
-    });
-
-    cSeries.push(+(safeDiv(cSQM, dayGrand)*100).toFixed(2));
-    damSeries.push(+(safeDiv(damSQM, dayGrand)*100).toFixed(2));
+    // Aggregate the filtered day once using the same proportional grade
+    // allocation as Defect Summary; never average record percentages.
+    const agg = aggregateRecords(dayRecords, 'sorter');
+    const selected = agg.paretoItems.find(x=>x.name===item.name);
+    cSeries.push(+((selected ? selected.cPct : 0)*100).toFixed(1));
+    damSeries.push(+((selected ? selected.damPct : 0)*100).toFixed(1));
   });
 
   const hasAnyData = cSeries.some(v=>v>0) || damSeries.some(v=>v>0);
@@ -3615,20 +3601,16 @@ async function renderAISquaringResult(sortingLine){
 
   const series = days.map(day=>{
     const dayRecords = records.filter(r=>r.date===day);
-    let dayGrand = 0, squaringSQM = 0;
-
-    dayRecords.forEach(rec=>{
-      const s = rec.summary || {};
-      dayGrand += Object.values(s).reduce((a,v)=>a+(+v||0), 0);
-      SQUARING_SUBCATEGORY_KEYS.forEach(k=> squaringSQM += (+s[k]||0));
-      (rec.defects||[]).forEach(d=>{
-        if(SQUARING_DEFECT_NAMES.includes(d.name)){
-          squaringSQM += (+d.sqmC||0) + (+d.sqmDam||0);
-        }
-      });
-    });
-
-    return +(safeDiv(squaringSQM, dayGrand)*100).toFixed(2);
+    const agg = aggregateRecords(dayRecords, 'sorter');
+    // Logged defects use Defect Summary's proportional grade allocation.
+    const loggedShare = agg.paretoItems
+      .filter(d=>SQUARING_DEFECT_NAMES.includes(d.name))
+      .reduce((total,d)=>total+d.cPct+d.damPct, 0);
+    // Grade Summary subcategories already contain production SQM and
+    // remain separate from the main C Grade and Damage defect pools.
+    const subcategorySQM = dayRecords.reduce((total,rec)=>total+
+      SQUARING_SUBCATEGORY_KEYS.reduce((sum,key)=>sum+(+(rec.summary||{})[key]||0),0),0);
+    return +((loggedShare + safeDiv(subcategorySQM,agg.grand))*100).toFixed(1);
   });
 
   const hasAnyData = series.some(v=>v>0);
