@@ -278,6 +278,34 @@
   table.summary-table{ width:100%; border-collapse:collapse; font-size:13px; }
   .analysis-grid{ display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:start; }
 
+  /* ---------- Gemini AI Analysis Chat ---------- */
+  .ai-chat-intro{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;}
+  .ai-chat-intro h2{margin-bottom:7px;}
+  .ai-chat-intro p{margin:0;color:var(--ink-soft);font-size:12.5px;line-height:1.55;}
+  .ai-chat-data-status{font-size:11.5px;color:var(--ink-soft);background:#f2f6f6;border:1px solid var(--panel-line);border-radius:7px;padding:8px 10px;}
+  .ai-chat-card{padding:0;overflow:hidden;}
+  .ai-chat-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;border-bottom:1px solid var(--panel-line);}
+  .ai-chat-toolbar strong{display:block;font-size:13px;color:var(--ink);}
+  .ai-chat-toolbar span{display:block;font-size:11px;color:var(--ink-soft);margin-top:3px;}
+  .ai-chat-suggestions{display:flex;gap:8px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid #eef1f1;}
+  .ai-chat-suggestion{border:1px solid var(--panel-line);background:#fbfcfc;color:var(--teal-deep);border-radius:18px;padding:7px 11px;font:600 11.5px var(--font-ui);cursor:pointer;}
+  .ai-chat-suggestion:hover{border-color:var(--teal);background:#f0f7f7;}
+  .ai-chat-messages{height:min(56vh,620px);min-height:320px;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:14px;background:#fbfcfc;}
+  .ai-chat-welcome,.ai-chat-message{display:flex;align-items:flex-start;gap:9px;max-width:92%;}
+  .ai-chat-message.user{align-self:flex-end;flex-direction:row-reverse;}
+  .ai-chat-avatar{width:30px;height:30px;flex:0 0 30px;border-radius:9px;background:var(--teal);color:#fff;display:flex;align-items:center;justify-content:center;font:700 10px var(--font-mono);}
+  .ai-chat-message.user .ai-chat-avatar{background:var(--slate);}
+  .ai-chat-bubble{padding:11px 13px;border:1px solid var(--panel-line);border-radius:4px 12px 12px 12px;background:#fff;color:var(--ink);font-size:13px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere;}
+  .ai-chat-message.user .ai-chat-bubble{background:#eaf3f6;border-color:#d6e5eb;border-radius:12px 4px 12px 12px;}
+  .ai-chat-bubble p{margin:6px 0 0;}
+  .ai-chat-disclaimer{font-size:11px;color:var(--ink-soft);}
+  .ai-chat-message.error .ai-chat-bubble{border-color:#e7b5ad;background:#fff7f5;color:var(--terracotta);}
+  .ai-chat-composer{display:flex;align-items:flex-end;gap:10px;padding:14px 16px;border-top:1px solid var(--panel-line);background:#fff;}
+  .ai-chat-composer textarea{flex:1;min-width:0;resize:vertical;max-height:150px;padding:10px 12px;border:1px solid var(--panel-line);border-radius:8px;font:13px/1.5 var(--font-ui);color:var(--ink);}
+  .ai-chat-composer textarea:focus{outline:2px solid var(--teal);outline-offset:1px;border-color:var(--teal);}
+  .ai-chat-composer button{min-width:82px;}
+  .ai-chat-footnote{padding:0 16px 13px;color:var(--ink-soft);font-size:10.5px;line-height:1.45;background:#fff;}
+  .ai-chat-message.pending .ai-chat-bubble{color:var(--ink-soft);font-style:italic;}
   /* ---------- AI Assistant ---------- */
   .ai-question-grid{ display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; }
   .ai-question{
@@ -382,6 +410,14 @@
     .filter-actions button.btn{ flex:1; }
     .ai-question-grid{ grid-template-columns:1fr; }
 
+    .ai-chat-messages{height:52vh;min-height:280px;padding:12px;}
+    .ai-chat-welcome,.ai-chat-message{max-width:100%;}
+    .ai-chat-toolbar{padding:12px;align-items:flex-start;}
+    .ai-chat-toolbar .btn{padding:8px 10px;font-size:11px;}
+    .ai-chat-composer{padding:10px;gap:7px;}
+    .ai-chat-composer button{min-width:68px;padding:10px 12px;}
+    .ai-chat-suggestions{padding:10px;gap:6px;}
+    .ai-chat-suggestion{font-size:10.5px;padding:7px 9px;}
     /* Quality Insights (Squaring / Variation) — these two questions have
        a dropdown+button setup step the other questions don't, and their
        controls weren't stacking cleanly on narrow screens. */
@@ -479,6 +515,7 @@
 
 <nav class="tabs">
   <button class="tab-btn active" data-view="entry">Defect Entry</button>
+  <button class="tab-btn" data-view="ai-chat">AI Analysis</button>
   <button class="tab-btn" data-view="analysis">Defect Analysis</button>
   <button class="tab-btn" data-view="dashboard">Dashboard</button>
   <button class="tab-btn" data-view="records">Records</button>
@@ -724,6 +761,51 @@
         <div class="chart-box"><canvas id="cGradePieChart"></canvas></div>
         <div class="chart-box"><canvas id="damagePieChart"></canvas></div>
       </div>
+    </div>
+  </section>
+
+  <!-- ============ GEMINI CHATBOT VIEW ============ -->
+  <section class="view" id="view-ai-chat">
+    <div class="card ai-chat-intro">
+      <div>
+        <h2><span class="n">AI</span> AI Analysis Assistant</h2>
+        <p>Ask questions about saved defect records. The assistant uses the dashboard's Google Sheets data to support its analysis.</p>
+      </div>
+      <div class="ai-chat-data-status" id="aiChatDataStatus">Saved-record data will load when you open this tab.</div>
+    </div>
+
+    <div class="card ai-chat-card">
+      <div class="ai-chat-toolbar">
+        <div>
+          <strong>Defect Analysis Chat</strong>
+          <span>Gemini-powered · Factory quality data</span>
+        </div>
+        <button type="button" class="btn ghost" id="aiChatClear">New conversation</button>
+      </div>
+
+      <div class="ai-chat-suggestions" id="aiChatSuggestions">
+        <button type="button" class="ai-chat-suggestion" data-prompt="Which defects contribute most to C Grade losses and Damage losses in the available records?">Top loss contributors</button>
+        <button type="button" class="ai-chat-suggestion" data-prompt="Compare defect performance across SL05, SL06 and SL07. Identify the main differences.">Compare sorting lines</button>
+        <button type="button" class="ai-chat-suggestion" data-prompt="Which defects show recurring or increasing trends over time? Support the answer with the available monthly data.">Recurring defect trends</button>
+        <button type="button" class="ai-chat-suggestion" data-prompt="Recommend practical corrective and preventive actions for the most significant defects. Separate confirmed evidence from hypotheses.">Corrective actions</button>
+      </div>
+
+      <div class="ai-chat-messages" id="aiChatMessages" aria-live="polite">
+        <div class="ai-chat-welcome">
+          <div class="ai-chat-avatar">AI</div>
+          <div class="ai-chat-bubble">
+            <strong>Hello! I'm your defect analysis assistant.</strong>
+            <p>Ask me about defect trends, grade-wise losses, production types, glazing lines, sorting lines, shifts or possible corrective actions.</p>
+            <p class="ai-chat-disclaimer">I will base findings on the records supplied to me and identify when the data is insufficient to confirm a root cause.</p>
+          </div>
+        </div>
+      </div>
+
+      <form class="ai-chat-composer" id="aiChatForm">
+        <textarea id="aiChatInput" rows="2" maxlength="2500" placeholder="Ask a question about your defect data…" aria-label="Ask AI Analysis" required></textarea>
+        <button type="submit" class="btn primary" id="aiChatSend">Send</button>
+      </form>
+      <div class="ai-chat-footnote">AI-generated analysis can be incorrect. Verify important findings against production records and process evidence.</div>
     </div>
   </section>
 
@@ -1034,6 +1116,199 @@
 const API_URL = "https://script.google.com/macros/s/AKfycbwpWmlExJ5bhcdT2FG05edXpUd3B-WwxSjaoX4Msk7RmQtvXForRh8jVF2zUwxUz3Z7IA/exec"; // e.g. "https://script.google.com/macros/s/XXXX/exec"
 
 /* =====================================================================
+   GEMINI CHAT — calls the existing Apps Script endpoint.
+   The Gemini API key stays in Apps Script Script Properties; it is never
+   placed in this HTML or exposed to dashboard users.
+===================================================================== */
+const AI_CHAT_MODEL = 'gemini-3.8-flash';
+let aiChatHistory = [];
+let aiChatBusy = false;
+let aiChatDataPromise = null;
+
+function escapeAIChatText(value){
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  })[ch]);
+}
+
+function addAIChatMessage(role, text, options={}){
+  const messages = document.getElementById('aiChatMessages');
+  const row = document.createElement('div');
+  row.className = `ai-chat-message ${role}${options.pending?' pending':''}${options.error?' error':''}`;
+  const avatar = document.createElement('div');
+  avatar.className = 'ai-chat-avatar';
+  avatar.textContent = role === 'user' ? 'YOU' : 'AI';
+  const bubble = document.createElement('div');
+  bubble.className = 'ai-chat-bubble';
+  bubble.textContent = text;
+  row.append(avatar,bubble);
+  messages.appendChild(row);
+  messages.scrollTop = messages.scrollHeight;
+  return row;
+}
+
+function clearAIChat(){
+  aiChatHistory = [];
+  const messages = document.getElementById('aiChatMessages');
+  messages.innerHTML = `<div class="ai-chat-welcome">
+    <div class="ai-chat-avatar">AI</div>
+    <div class="ai-chat-bubble"><strong>New conversation started.</strong><p>Ask a question about your saved defect records.</p></div>
+  </div>`;
+}
+
+function summarizeAIChatRecords(records){
+  const list = Array.isArray(records) ? records : [];
+  const sumBy = (items, keyFn, limit=30) => {
+    const groups = new Map();
+    items.forEach(rec=>{
+      const key = keyFn(rec) || 'Not recorded';
+      if(!groups.has(key)) groups.set(key,[]);
+      groups.get(key).push(rec);
+    });
+    return [...groups.entries()]
+      .map(([key,group])=>({key,...summarizeAIChatGroup(group)}))
+      .sort((a,b)=>b.recordCount-a.recordCount)
+      .slice(0,limit);
+  };
+  const summarizeAIChatGroup = group => {
+    const agg = aggregateRecords(group,'sorter');
+    const defectTotals = new Map();
+    group.forEach(rec=>(rec.defects||[]).forEach(d=>{
+      const item = defectTotals.get(d.name) || {name:d.name,secondGradeSqm:0,cGradeSqm:0,damageSqm:0};
+      item.secondGradeSqm += +d.sqm2nd || 0;
+      item.cGradeSqm += +d.sqmC || 0;
+      item.damageSqm += +d.sqmDam || 0;
+      defectTotals.set(d.name,item);
+    }));
+    const top = field => [...defectTotals.values()]
+      .filter(d=>d[field]>0)
+      .sort((a,b)=>b[field]-a[field])
+      .slice(0,10);
+    return {
+      recordCount: group.length,
+      totalProductionSqm: +agg.grand.toFixed(2),
+      sellableYieldPct: agg.sellablePct===null?null:+(agg.sellablePct*100).toFixed(2),
+      cGradePct: agg.cPct===null?null:+(agg.cPct*100).toFixed(2),
+      damagePct: agg.damPct===null?null:+(agg.damPct*100).toFixed(2),
+      topSecondGradeDefects: top('secondGradeSqm'),
+      topCGradeDefects: top('cGradeSqm'),
+      topDamageDefects: top('damageSqm')
+    };
+  };
+
+  if(!list.length) return {recordCount:0,note:'No saved defect records were returned.'};
+  const sorted = [...list].sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
+  const monthly = sumBy(list,r=>(r.date||'').slice(0,7)||'Undated',36)
+    .sort((a,b)=>a.key.localeCompare(b.key));
+  const overall = summarizeAIChatGroup(list);
+  return {
+    dataDescription:'Aggregated from saved daily sorter defect records. SQM values are used where available. Production Balancing adjustments are not included in this chat summary.',
+    dateRange:{from:sorted[0].date||null,to:sorted[sorted.length-1].date||null},
+    overall,
+    byMonth:monthly,
+    bySortingLine:sumBy(list,r=>r.sortingLine||'Not recorded',20),
+    byGlazingLine:sumBy(list,r=>r.gl||'Not recorded',20),
+    byShift:sumBy(list,r=>({M:'Morning',E:'Evening',N:'Night'}[r.shift]||r.shift||'Not recorded'),10),
+    byTexture:sumBy(list,r=>r.texture||'Not recorded',20),
+    bySize:sumBy(list,r=>r.size||'Not recorded',20),
+    topTypes:sumBy(list,r=>r.type||'Not recorded',20)
+  };
+}
+
+async function loadAIChatData(force=false){
+  const status = document.getElementById('aiChatDataStatus');
+  if(aiChatDataPromise) return aiChatDataPromise;
+  aiChatDataPromise = (async()=>{
+    status.textContent = 'Loading saved defect records…';
+    try{
+      const records = force ? await fetchAllRecords(true) : await fetchAllRecords();
+      status.textContent = `${records.length.toLocaleString()} saved record(s) available for analysis.`;
+      return summarizeAIChatRecords(records);
+    }catch(err){
+      status.textContent = 'Could not load saved records. Check the Sheets connection.';
+      throw err;
+    }finally{
+      aiChatDataPromise = null;
+    }
+  })();
+  return aiChatDataPromise;
+}
+
+async function sendAIChatMessage(rawText){
+  const message = String(rawText||'').trim();
+  if(!message || aiChatBusy) return;
+  if(!API_URL){
+    addAIChatMessage('assistant','The Google Apps Script API_URL is not configured. Chat is unavailable.',{error:true});
+    return;
+  }
+
+  aiChatBusy = true;
+  const input = document.getElementById('aiChatInput');
+  const send = document.getElementById('aiChatSend');
+  input.value = '';
+  input.disabled = true;
+  send.disabled = true;
+  addAIChatMessage('user',message);
+  const pending = addAIChatMessage('assistant','Reviewing the saved defect data and preparing an answer…',{pending:true});
+
+  try{
+    const context = await loadAIChatData();
+    aiChatHistory.push({role:'user',text:message});
+    const history = aiChatHistory.slice(-12);
+    const response = await fetch(API_URL,{
+      method:'POST',
+      headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify({
+        action:'aiChat',
+        model:AI_CHAT_MODEL,
+        message,
+        history,
+        context
+      })
+    });
+    const result = await response.json();
+    if(!response.ok || !result.success || !result.reply){
+      throw new Error(result.error || `Gemini request failed (${response.status}).`);
+    }
+    pending.remove();
+    addAIChatMessage('assistant',result.reply);
+    aiChatHistory.push({role:'model',text:result.reply});
+    aiChatHistory = aiChatHistory.slice(-12);
+  }catch(err){
+    pending.remove();
+    addAIChatMessage('assistant',`I couldn't complete the analysis. ${err.message||'Please try again.'}`,{error:true});
+    if(aiChatHistory.length && aiChatHistory[aiChatHistory.length-1].role==='user') aiChatHistory.pop();
+  }finally{
+    aiChatBusy = false;
+    input.disabled = false;
+    send.disabled = false;
+    input.focus();
+  }
+}
+
+function wireAIChat(){
+  const form = document.getElementById('aiChatForm');
+  if(!form || form.dataset.wired==='1') return;
+  form.dataset.wired='1';
+  form.addEventListener('submit',e=>{
+    e.preventDefault();
+    const input=document.getElementById('aiChatInput');
+    sendAIChatMessage(input.value);
+  });
+  document.getElementById('aiChatClear').addEventListener('click',clearAIChat);
+  document.querySelectorAll('.ai-chat-suggestion').forEach(btn=>{
+    btn.addEventListener('click',()=>sendAIChatMessage(btn.dataset.prompt));
+  });
+  document.getElementById('aiChatInput').addEventListener('keydown',e=>{
+    if(e.key==='Enter' && !e.shiftKey){
+      e.preventDefault();
+      form.requestSubmit();
+    }
+  });
+}
+
+
+/* =====================================================================
    DATA — defect list & summary categories (mirrors the Excel sheet)
 ===================================================================== */
 const DEFECTS = [
@@ -1192,6 +1467,7 @@ function wireEvents(){
       if(b.dataset.view==='dashboard') initDashboard();
       if(b.dataset.view==='analysis') initAnalysis();
       if(b.dataset.view==='records'){ fetchAllRecords().then(renderRecordsTable); initBalancingSection(); }
+      if(b.dataset.view==='ai-chat'){ wireAIChat(); loadAIChatData(true).catch(err=>console.error('AI chat data load failed:',err)); }
       if(b.dataset.view==='ai'){ fetchAllRecords(); fetchBalancingData(); }
     });
   });
