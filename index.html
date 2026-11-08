@@ -1158,6 +1158,9 @@ function clearAIChat(){
 
 function summarizeAIChatRecords(records){
   const list = Array.isArray(records) ? records : [];
+  // Group-level trend tables carry production/yield/grade metrics only.
+  // Detailed defect rankings are sent once for the overall dataset below,
+  // rather than repeated inside every month/line/texture/size group.
   const sumBy = (items, keyFn, limit=30) => {
     const groups = new Map();
     items.forEach(rec=>{
@@ -1166,11 +1169,11 @@ function summarizeAIChatRecords(records){
       groups.get(key).push(rec);
     });
     return [...groups.entries()]
-      .map(([key,group])=>({key,...summarizeAIChatGroup(group)}))
+      .map(([key,group])=>({key,...summarizeAIChatGroup(group,false)}))
       .sort((a,b)=>b.recordCount-a.recordCount)
       .slice(0,limit);
   };
-  const summarizeAIChatGroup = group => {
+  const summarizeAIChatGroup = (group, includeDefectRankings=true) => {
     const agg = aggregateRecords(group,'sorter');
     const defectTotals = new Map();
     group.forEach(rec=>(rec.defects||[]).forEach(d=>{
@@ -1190,15 +1193,17 @@ function summarizeAIChatRecords(records){
       sellableYieldPct: agg.sellablePct===null?null:+(agg.sellablePct*100).toFixed(2),
       cGradePct: agg.cPct===null?null:+(agg.cPct*100).toFixed(2),
       damagePct: agg.damPct===null?null:+(agg.damPct*100).toFixed(2),
-      topSecondGradeDefects: top('secondGradeSqm'),
-      topCGradeDefects: top('cGradeSqm'),
-      topDamageDefects: top('damageSqm')
+      ...(includeDefectRankings ? {
+        topSecondGradeDefects: top('secondGradeSqm'),
+        topCGradeDefects: top('cGradeSqm'),
+        topDamageDefects: top('damageSqm')
+      } : {})
     };
   };
 
   if(!list.length) return {recordCount:0,note:'No saved defect records were returned.'};
   const sorted = [...list].sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
-  const monthly = sumBy(list,r=>(r.date||'').slice(0,7)||'Undated',36)
+  const monthly = sumBy(list,r=>(r.date||'').slice(0,7)||'Undated',60)
     .sort((a,b)=>a.key.localeCompare(b.key));
   const overall = summarizeAIChatGroup(list);
   return {
@@ -1206,12 +1211,12 @@ function summarizeAIChatRecords(records){
     dateRange:{from:sorted[0].date||null,to:sorted[sorted.length-1].date||null},
     overall,
     byMonth:monthly,
-    bySortingLine:sumBy(list,r=>r.sortingLine||'Not recorded',20),
-    byGlazingLine:sumBy(list,r=>r.gl||'Not recorded',20),
-    byShift:sumBy(list,r=>({M:'Morning',E:'Evening',N:'Night'}[r.shift]||r.shift||'Not recorded'),10),
-    byTexture:sumBy(list,r=>r.texture||'Not recorded',20),
-    bySize:sumBy(list,r=>r.size||'Not recorded',20),
-    topTypes:sumBy(list,r=>r.type||'Not recorded',20)
+    bySortingLine:sumBy(list,r=>r.sortingLine||'Not recorded',12),
+    byGlazingLine:sumBy(list,r=>r.gl||'Not recorded',12),
+    byShift:sumBy(list,r=>({M:'Morning',E:'Evening',N:'Night'}[r.shift]||r.shift||'Not recorded'),6),
+    byTexture:sumBy(list,r=>r.texture||'Not recorded',12),
+    bySize:sumBy(list,r=>r.size||'Not recorded',15),
+    topTypes:sumBy(list,r=>r.type||'Not recorded',15)
   };
 }
 
