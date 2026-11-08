@@ -1124,6 +1124,7 @@ const AI_CHAT_MODEL = 'gemini-3.8-flash';
 let aiChatHistory = [];
 let aiChatBusy = false;
 let aiChatDataPromise = null;
+let aiChatRecordsCache = null;
 
 function escapeAIChatText(value){
   return String(value ?? '').replace(/[&<>"']/g, ch => ({
@@ -1173,7 +1174,7 @@ function summarizeAIChatRecords(records){
       .sort((a,b)=>b.recordCount-a.recordCount)
       .slice(0,limit);
   };
-  const summarizeAIChatGroup = (group, includeDefectRankings=true) => {
+  const summarizeAIChatGroup = (group, includeDefectRankings=true, includeAllDefectTotals=false) => {
     const agg = aggregateRecords(group,'sorter');
     const defectTotals = new Map();
     group.forEach(rec=>(rec.defects||[]).forEach(d=>{
@@ -1197,6 +1198,10 @@ function summarizeAIChatRecords(records){
         topSecondGradeDefects: top('secondGradeSqm'),
         topCGradeDefects: top('cGradeSqm'),
         topDamageDefects: top('damageSqm')
+      } : {}),
+      ...(includeAllDefectTotals ? {
+        allDefectTotals: [...defectTotals.values()]
+          .sort((a,b)=>(b.secondGradeSqm+b.cGradeSqm+b.damageSqm)-(a.secondGradeSqm+a.cGradeSqm+a.damageSqm))
       } : {})
     };
   };
@@ -1205,7 +1210,7 @@ function summarizeAIChatRecords(records){
   const sorted = [...list].sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
   const monthly = sumBy(list,r=>(r.date||'').slice(0,7)||'Undated',60)
     .sort((a,b)=>a.key.localeCompare(b.key));
-  const overall = summarizeAIChatGroup(list);
+  const overall = summarizeAIChatGroup(list,true,true);
   return {
     dataDescription:'Aggregated from saved daily sorter defect records. SQM values are used where available. Production Balancing adjustments are not included in this chat summary.',
     dateRange:{from:sorted[0].date||null,to:sorted[sorted.length-1].date||null},
@@ -1226,7 +1231,10 @@ async function loadAIChatData(force=false){
   aiChatDataPromise = (async()=>{
     status.textContent = 'Loading saved defect records…';
     try{
-      const records = force ? await fetchAllRecords(true) : await fetchAllRecords();
+      const records = force || !Array.isArray(aiChatRecordsCache)
+        ? await fetchAllRecords(true)
+        : aiChatRecordsCache;
+      aiChatRecordsCache = records;
       status.textContent = `${records.length.toLocaleString()} saved record(s) available for analysis.`;
       return summarizeAIChatRecords(records);
     }catch(err){
@@ -1237,6 +1245,41 @@ async function loadAIChatData(force=false){
     }
   })();
   return aiChatDataPromise;
+}
+
+function filterAIChatRecordsForQuestion(records, question){
+  const source = Array.isArray(records) ? records : [];
+  const q = String(question || '').toLowerCase();
+  let filtered = source;
+
+  // Recognize month + year, e.g. "November 2026" or "2026-11".
+  const monthMap = {
+    january:'01', jan:'01', february:'02', feb:'02', march:'03', mar:'03',
+    april:'04', apr:'04', may:'05', june:'06', jun:'06', july:'07', jul:'07',
+    august:'08', aug:'08', september:'09', sep:'09', sept:'09',
+    october:'10', oct:'10', november:'11', nov:'11', december:'12', dec:'12'
+  };
+  let monthYear = q.match(/\b(20\d{2})[-/](0?[1-9]|1[0-2])\b/);
+  if(monthYear){
+    const target = `${monthYear[1]}-${String(monthYear[2]).padStart(2,'0')}`;
+    filtered = filtered.filter(r=>String(r.date||'').slice(0,7)===target);
+  } else {
+    const monthNames = Object.keys(monthMap).sort((a,b)=>b.length-a.length).join('|');
+    const namedMonth = q.match(new RegExp('\\b(' + monthNames + ')\\s+(20\\d{2})\\b','i'));
+    if(namedMonth){
+      const target = `${namedMonth[2]}-${monthMap[namedMonth[1].toLowerCase()]}`;
+      filtered = filtered.filter(r=>String(r.date||'').slice(0,7)===target);
+    }
+  }
+
+  // Recognize a specific sorting line such as SL05, SL 05 or Sorting Line 05.
+  const lineMatch = q.match(/\b(?:sl|sorting\s*line)\s*0?([5-7])\b/i);
+  if(lineMatch){
+    const targetLine = `SL0${lineMatch[1]}`;
+    filtered = filtered.filter(r=>String(r.sortingLine||'').replace(/\s/g,'').toUpperCase()===targetLine);
+  }
+
+  return filtered;
 }
 
 async function sendAIChatMessage(rawText){
@@ -1257,7 +1300,18 @@ async function sendAIChatMessage(rawText){
   const pending = addAIChatMessage('assistant','Reviewing the saved defect data and preparing an answer…',{pending:true});
 
   try{
-    const context = await loadAIChatData();
+    await loadAIChatData();
+    // Apply explicit month/year and sorting-line filters before building the
+    // Gemini context. A focused question should not send the entire factory
+    // history to the API.
+    const relevantRecords = filterAIChatRecordsForQuestion(aiChatRecordsCache,message);
+    const context = summarizeAIChatRecords(relevantRecords);
+    context.queryScope = {
+      requestedQuestion: message,
+      appliedRecordFilter: relevantRecords.length !== aiChatRecordsCache.length,
+      matchingRecordCount: relevantRecords.length,
+      totalAvailableRecordCount: aiChatRecordsCache.length
+    };
     aiChatHistory.push({role:'user',text:message});
     const history = aiChatHistory.slice(-12);
     const response = await fetch(API_URL,{
