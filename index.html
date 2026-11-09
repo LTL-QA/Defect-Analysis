@@ -1201,7 +1201,8 @@ function summarizeAIChatRecords(records){
       } : {}),
       ...(includeAllDefectTotals ? {
         allDefectTotals: [...defectTotals.values()]
-          .sort((a,b)=>(b.secondGradeSqm+b.cGradeSqm+b.damageSqm)-(a.secondGradeSqm+a.cGradeSqm+a.damageSqm))
+          .map(d=>({...d,totalSqm:+(d.secondGradeSqm+d.cGradeSqm+d.damageSqm).toFixed(2)}))
+          .sort((a,b)=>b.totalSqm-a.totalSqm)
       } : {})
     };
   };
@@ -1225,18 +1226,64 @@ function summarizeAIChatRecords(records){
   };
 }
 
-async function loadAIChatData(force=false){
+function getAIChatDateScope(question){
+  const q = String(question || '').toLowerCase();
+  const monthMap = {
+    january:'01', jan:'01', february:'02', feb:'02', march:'03', mar:'03',
+    april:'04', apr:'04', may:'05', june:'06', jun:'06', july:'07', jul:'07',
+    august:'08', aug:'08', september:'09', sep:'09', sept:'09',
+    october:'10', oct:'10', november:'11', nov:'11', december:'12', dec:'12'
+  };
+  let match = q.match(/\b(20\d{2})[-/](0?[1-9]|1[0-2])\b/);
+  let year, month;
+  if(match){
+    year = Number(match[1]);
+    month = Number(match[2]);
+  } else {
+    const monthNames = Object.keys(monthMap).sort((a,b)=>b.length-a.length).join('|');
+    match = q.match(new RegExp('\\b(' + monthNames + ')\\s+(20\\d{2})\\b','i'));
+    if(match){
+      year = Number(match[2]);
+      month = Number(monthMap[match[1].toLowerCase()]);
+    }
+  }
+  if(year && month){
+    const from = `${year}-${String(month).padStart(2,'0')}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const to = `${year}-${String(month).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
+    return {from,to,label:`${from.slice(0,7)}`};
+  }
+
+  // No period in the question: use the current calendar month only.
+  // The full month range is used so the scope remains consistent for every
+  // question asked during the month, including when records are added later.
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonthNumber = now.getMonth()+1;
+  const monthKey = `${currentYear}-${String(currentMonthNumber).padStart(2,'0')}`;
+  const lastDay = new Date(currentYear, currentMonthNumber, 0).getDate();
+  const from = `${monthKey}-01`;
+  const to = `${monthKey}-${String(lastDay).padStart(2,'0')}`;
+  return {from,to,label:`current calendar month (${monthKey})`,isDefaultMonth:true};
+}
+
+async function loadAIChatData(question=''){
   const status = document.getElementById('aiChatDataStatus');
+  const scope = getAIChatDateScope(question);
+  const cacheKey = `${scope.from}|${scope.to}`;
   if(aiChatDataPromise) return aiChatDataPromise;
   aiChatDataPromise = (async()=>{
-    status.textContent = 'Loading saved defect records…';
+    status.textContent = `Loading saved defect records for ${scope.label}…`;
     try{
-      const records = force || !Array.isArray(aiChatRecordsCache)
-        ? await fetchAllRecords(true)
-        : aiChatRecordsCache;
+      if(!window._aiChatRangeCache) window._aiChatRangeCache = {};
+      let records = window._aiChatRangeCache[cacheKey];
+      if(!Array.isArray(records)){
+        records = await fetchRecordsInRange(scope.from,scope.to);
+        window._aiChatRangeCache[cacheKey] = records;
+      }
       aiChatRecordsCache = records;
-      status.textContent = `${records.length.toLocaleString()} saved record(s) available for analysis.`;
-      return summarizeAIChatRecords(records);
+      status.textContent = `${records.length.toLocaleString()} saved record(s) found for ${scope.label}.`;
+      return {records,scope};
     }catch(err){
       status.textContent = 'Could not load saved records. Check the Sheets connection.';
       throw err;
@@ -1300,17 +1347,18 @@ async function sendAIChatMessage(rawText){
   const pending = addAIChatMessage('assistant','Reviewing the saved defect data and preparing an answer…',{pending:true});
 
   try{
-    await loadAIChatData();
-    // Apply explicit month/year and sorting-line filters before building the
-    // Gemini context. A focused question should not send the entire factory
-    // history to the API.
-    const relevantRecords = filterAIChatRecordsForQuestion(aiChatRecordsCache,message);
+    // Filter at the Google Sheets backend by date BEFORE downloading/parsing
+    // JSON records. This avoids loading the entire historical dataset for a
+    // month-specific question such as "SL05 edge chip in November 2026".
+    const loaded = await loadAIChatData(message);
+    const relevantRecords = filterAIChatRecordsForQuestion(loaded.records,message);
     const context = summarizeAIChatRecords(relevantRecords);
     context.queryScope = {
       requestedQuestion: message,
-      appliedRecordFilter: relevantRecords.length !== aiChatRecordsCache.length,
-      matchingRecordCount: relevantRecords.length,
-      totalAvailableRecordCount: aiChatRecordsCache.length
+      dateRangeLoaded: {from:loaded.scope.from,to:loaded.scope.to},
+      scopeDescription: loaded.scope.label,
+      defaultedToCurrentMonth: !!loaded.scope.isDefaultMonth,
+      matchingRecordCount: relevantRecords.length
     };
     aiChatHistory.push({role:'user',text:message});
     const history = aiChatHistory.slice(-12);
@@ -1526,7 +1574,11 @@ function wireEvents(){
       if(b.dataset.view==='dashboard') initDashboard();
       if(b.dataset.view==='analysis') initAnalysis();
       if(b.dataset.view==='records'){ fetchAllRecords().then(renderRecordsTable); initBalancingSection(); }
-      if(b.dataset.view==='ai-chat'){ wireAIChat(); loadAIChatData(true).catch(err=>console.error('AI chat data load failed:',err)); }
+      if(b.dataset.view==='ai-chat'){
+        wireAIChat();
+        const status=document.getElementById('aiChatDataStatus');
+        if(status) status.textContent='Ask a question to load only the relevant saved defect records.';
+      }
       if(b.dataset.view==='ai'){ fetchAllRecords(); fetchBalancingData(); }
     });
   });
