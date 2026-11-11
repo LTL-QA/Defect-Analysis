@@ -1033,6 +1033,41 @@
 ===================================================================== */
 const API_URL = "https://script.google.com/macros/s/AKfycbwpWmlExJ5bhcdT2FG05edXpUd3B-WwxSjaoX4Msk7RmQtvXForRh8jVF2zUwxUz3Z7IA/exec"; // e.g. "https://script.google.com/macros/s/XXXX/exec"
 
+/* Firebase-authenticated Apps Script API helpers */
+window.dashboardRole = null;
+async function getFirebaseIdToken(){
+  if(!auth.currentUser) throw new Error('Please sign in again.');
+  return await auth.currentUser.getIdToken();
+}
+async function apiGet(params){
+  const url=new URL(API_URL);
+  Object.entries(params||{}).forEach(([key,value])=>{if(value!==undefined&&value!==null)url.searchParams.set(key,String(value));});
+  url.searchParams.set('token',await getFirebaseIdToken());
+  const response=await fetch(url.toString());
+  const data=await response.json();
+  if(data.authRequired) throw new Error(data.error||'Please sign in again.');
+  return data;
+}
+async function apiPost(payload){
+  const response=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({...payload,authToken:await getFirebaseIdToken()})});
+  const data=await response.json();
+  if(data.authRequired) throw new Error(data.error||'Please sign in again.');
+  return data;
+}
+async function loadDashboardSession(){
+  const data=await apiGet({action:'getSession'});
+  const role=String(data.role||'').toLowerCase();
+  if(!data.success||!['admin','editor','viewer'].includes(role)) throw new Error(data.error||'No active dashboard role is assigned to this account.');
+  window.dashboardRole=role;
+  const viewer=role==='viewer';
+  document.querySelectorAll('.tab-btn[data-view="entry"],.tab-btn[data-view="records"]').forEach(el=>{el.hidden=viewer;});
+  if(viewer){
+    document.getElementById('view-entry').classList.remove('active');
+    document.getElementById('view-records').classList.remove('active');
+  }
+  return data;
+}
+
 /* =====================================================================
    DATA — defect list & summary categories (mirrors the Excel sheet)
 ===================================================================== */
@@ -1114,8 +1149,7 @@ function init(){
 async function syncMasterTypeList(){
   if(!API_URL) return;
   try{
-    const res = await fetch(`${API_URL}?action=getTypes`);
-    const data = await res.json();
+    const data = await apiGet({action:'getTypes'});
     if(data.success && Array.isArray(data.types)){
       data.types.forEach(t=>{
         if(t && !TYPE_CODES.some(x=>x.toUpperCase()===t.toUpperCase())) TYPE_CODES.push(t);
@@ -1185,6 +1219,7 @@ function removeDefectFromLog(idx){
 function wireEvents(){
   document.querySelectorAll('.tab-btn').forEach(b=>{
     b.addEventListener('click', ()=>{
+      if(window.dashboardRole==='viewer' && ['entry','records'].includes(b.dataset.view)) return;
       document.querySelectorAll('.tab-btn').forEach(x=>x.classList.remove('active'));
       document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
       b.classList.add('active');
@@ -1512,12 +1547,7 @@ async function saveNewTypeToMasterList(val){
     return;
   }
   try{
-    const res = await fetch(API_URL, {
-      method:'POST',
-      headers:{ 'Content-Type':'text/plain' },
-      body: JSON.stringify({ action:'addType', type: val })
-    });
-    const data = await res.json();
+    const data = await apiPost({ action:'addType', type: val });
     if(data.success){
       if(!TYPE_CODES.some(t=>t.toUpperCase()===val.toUpperCase())) TYPE_CODES.push(val);
       document.dispatchEvent(new Event('typeSuggestionsChanged'));
@@ -1996,12 +2026,7 @@ async function saveRecord(){
   entryControls.forEach(({el})=>el.disabled=true);
   let saveSucceeded = false;
   try{
-    const res = await fetch(API_URL, {
-      method:'POST',
-      headers:{ 'Content-Type':'text/plain' },
-      body: JSON.stringify({ action:originalRecord ? 'updateRecord' : 'addRecord', record: rec, ...(originalRecord ? {originalRecord} : {}) })
-    });
-    const data = await res.json();
+    const data = await apiPost({ action:originalRecord ? 'updateRecord' : 'addRecord', record: rec, ...(originalRecord ? {originalRecord} : {}) });
     if(data.success){
       saveSucceeded = true;
       status.textContent = originalRecord ? 'Changes saved ✓ — the existing record was updated.' : 'Saved to sheet ✓ — button will re-enable once you change the Defect Log or Grade Summary.';
@@ -2065,12 +2090,7 @@ async function deleteSavedRecord(id, idx){
   if(!API_URL){ alert('API_URL not set — nothing to delete on the server.'); return; }
 
   try{
-    const res = await fetch(API_URL, {
-      method:'POST',
-      headers:{ 'Content-Type':'text/plain' },
-      body: JSON.stringify({ action:'deleteRecord', id })
-    });
-    const data = await res.json();
+    const data = await apiPost({ action:'deleteRecord', id });
     if(data.success){
       window._allRecords = (window._allRecords||[]).filter(r=>r.id !== id);
       renderRecordsTable(window._allRecords);
@@ -2273,11 +2293,7 @@ async function saveBalancingRow(type, gl, monthKey){
   if(!API_URL){ note.textContent = 'API_URL not set — cannot save.'; note.style.color = 'var(--terracotta)'; return; }
 
   try{
-    const res = await fetch(API_URL, {
-      method:'POST', headers:{ 'Content-Type':'text/plain' },
-      body: JSON.stringify({ action:'saveBalancing', entry })
-    });
-    const data = await res.json();
+    const data = await apiPost({ action:'saveBalancing', entry });
     if(data.success){
       window._balancingData = (window._balancingData||[]).filter(b=> !(b.type===type && b.gl===gl && b.month===monthKey));
       // Remove a legacy Type-only entry from the local cache once a GL-specific
@@ -2304,8 +2320,7 @@ async function fetchAdditionalProductionData(force){
   if(window._additionalProductionData && !force) return window._additionalProductionData;
   if(!API_URL){ window._additionalProductionData=[]; return []; }
   try{
-    const res=await fetch(`${API_URL}?action=getAdditionalProduction`);
-    const data=await res.json();
+    const data=await apiGet({action:'getAdditionalProduction'});
     window._additionalProductionData=data.additionalProduction||[];
   }catch(err){
     console.error('Could not load Additional Production:',err);
@@ -2426,8 +2441,7 @@ async function saveAdditionalProduction(){
   };
   note.textContent=window._editingAdditionalId?'Updating…':'Saving…'; note.style.color='var(--ink-soft)';
   try{
-    const res=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'saveAdditionalProduction',entry})});
-    const data=await res.json();
+    const data=await apiPost({action:'saveAdditionalProduction',entry});
     if(!data.success) throw new Error(data.error||'unknown error');
     window._additionalProductionData=(window._additionalProductionData||[]).filter(a=>String(a.id)!==String(entry.id));
     window._additionalProductionData.push(entry);
@@ -2452,8 +2466,7 @@ async function deleteAdditionalProduction(id){
   if(!confirm(`Delete additional production for "${a.type}" (${a.month})?`)) return;
   const note=document.getElementById('additionalProductionNote');
   try{
-    const res=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({action:'deleteAdditionalProduction',id})});
-    const data=await res.json();
+    const data=await apiPost({action:'deleteAdditionalProduction',id});
     if(!data.success) throw new Error(data.error||'unknown error');
     window._additionalProductionData=(window._additionalProductionData||[]).filter(x=>String(x.id)!==String(id));
     note.textContent=`Deleted additional production for ${a.type}.`; note.style.color='var(--good)';
@@ -2777,8 +2790,7 @@ function exportAnalysisCSV(){
 async function fetchAllRecords(force){
   if(window._allRecords && !force) return window._allRecords;
   if(!API_URL){ window._allRecords = []; return []; }
-  const res = await fetch(`${API_URL}?action=getRecords`);
-  const data = await res.json();
+  const data = await apiGet({action:'getRecords'});
   window._allRecords = data.records || [];
   document.dispatchEvent(new Event('typeSuggestionsChanged'));
   return window._allRecords;
@@ -2793,8 +2805,7 @@ async function fetchAllRecords(force){
 // valid choice there).
 async function fetchRecordsInRange(fromDate, toDate){
   if(!API_URL) return [];
-  const res = await fetch(`${API_URL}?action=getRecords&from=${fromDate}&to=${toDate}`);
-  const data = await res.json();
+  const data = await apiGet({action:'getRecords',from:fromDate,to:toDate});
   return data.records || [];
 }
 
@@ -2915,8 +2926,7 @@ async function fetchBalancingData(force){
   if(window._balancingData && !force) return window._balancingData;
   if(!API_URL){ window._balancingData = []; return []; }
   try{
-    const res = await fetch(`${API_URL}?action=getBalancing`);
-    const data = await res.json();
+    const data = await apiGet({action:'getBalancing'});
     window._balancingData = data.balancing || [];
   }catch(err){
     console.error('Could not load Production Balancing data:', err);
@@ -3677,17 +3687,33 @@ auth.setPersistence(firebase.auth.Auth.Persistence.NONE)
   .then(() => auth.signOut())
   .catch(err => console.error('Auth persistence setup failed:', err))
   .finally(() => {
-    auth.onAuthStateChanged(user => {
-      const loginScreen = document.getElementById('loginScreen');
-      const appContent = document.getElementById('appContent');
+    auth.onAuthStateChanged(async user => {
+      const loginScreen=document.getElementById('loginScreen');
+      const appContent=document.getElementById('appContent');
       if(user){
-        loginScreen.style.display = 'none';
-        appContent.style.display = 'block';
-        document.getElementById('userEmail').textContent = user.email;
-        if(!appInitialized){ appInitialized = true; init(); }
-      } else {
-        loginScreen.style.display = 'flex';
-        appContent.style.display = 'none';
+        appContent.style.display='none';
+        try{
+          await loadDashboardSession();
+          loginScreen.style.display='none';
+          appContent.style.display='block';
+          if(!appInitialized){appInitialized=true;init();}
+          if(window.dashboardRole==='viewer'){
+            document.querySelectorAll('.tab-btn').forEach(el=>el.classList.remove('active'));
+            document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));
+            document.querySelector('.tab-btn[data-view="analysis"]').classList.add('active');
+            document.getElementById('view-analysis').classList.add('active');
+            initAnalysis();
+          }
+        }catch(err){
+          document.getElementById('loginError').textContent=err.message;
+          await auth.signOut();
+          loginScreen.style.display='flex';
+          appContent.style.display='none';
+        }
+      }else{
+        window.dashboardRole=null;
+        loginScreen.style.display='flex';
+        appContent.style.display='none';
       }
     });
   });
