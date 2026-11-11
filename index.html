@@ -3714,30 +3714,34 @@ auth.setPersistence(firebase.auth.Auth.Persistence.NONE)
         window.dashboardRole=null;
         loginScreen.style.display='flex';
         appContent.style.display='none';
+        const submitBtn=document.getElementById('loginSubmit');
+        submitBtn.disabled=false;
+        submitBtn.textContent='Sign In';
       }
     });
   });
 
-document.getElementById('loginForm').addEventListener('submit', e=>{
+document.getElementById('loginForm').addEventListener('submit', async e=>{
   e.preventDefault();
   const email = document.getElementById('loginEmail').value.trim();
   const password = document.getElementById('loginPassword').value;
   const errorBox = document.getElementById('loginError');
   const submitBtn = document.getElementById('loginSubmit');
+  if(submitBtn.disabled) return;
   errorBox.textContent = '';
   submitBtn.disabled = true;
   submitBtn.textContent = 'Signing in…';
 
-  auth.signInWithEmailAndPassword(email, password)
-    .catch(err => {
-      errorBox.textContent = err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found'
-        ? 'Incorrect email or password.'
-        : err.message;
-    })
-    .finally(() => {
-      submitBtn.disabled = false;
-      submitBtn.textContent = 'Sign In';
-    });
+  try{
+    await auth.signInWithEmailAndPassword(email, password);
+    // Keep the button disabled while onAuthStateChanged verifies the user's dashboard role.
+  }catch(err){
+    errorBox.textContent = err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found'
+      ? 'Incorrect email or password.'
+      : err.message;
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Sign In';
+  }
 });
 
 document.getElementById('signOutLink').addEventListener('click', e=>{
