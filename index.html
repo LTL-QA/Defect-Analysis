@@ -108,6 +108,40 @@
   .field input:focus, .field select:focus{ outline:2px solid var(--teal); outline-offset:1px; border-color:var(--teal);}
   .field input[readonly]{ background:#eef2f2; color:var(--ink-soft); font-weight:600; cursor:not-allowed; }
 
+  /* ---------- Analysis multi-type selector ---------- */
+  .type-multi-select{ position:relative; width:100%; }
+  .type-multi-control{
+    min-height:38px; display:flex; align-items:center; flex-wrap:wrap; gap:5px;
+    padding:4px 7px; border:1px solid var(--panel-line); border-radius:7px;
+    background:#fbfcfc; cursor:text;
+  }
+  .type-multi-control:focus-within{ outline:2px solid var(--teal); outline-offset:1px; border-color:var(--teal); }
+  .type-multi-control input{
+    flex:1 1 110px; min-width:90px; width:auto; height:26px; padding:0 3px;
+    border:0; outline:0; background:transparent; font-family:var(--font-mono); font-size:12px;
+  }
+  .type-chip{
+    display:inline-flex; align-items:center; gap:5px; max-width:100%;
+    padding:3px 6px; border-radius:5px; background:#e6f1f0; color:var(--teal-deep);
+    font-size:10.5px; font-weight:700; line-height:1.4;
+  }
+  .type-chip button{ border:0; padding:0 1px; background:transparent; color:inherit; cursor:pointer; font-size:14px; line-height:1; }
+  .type-multi-options{
+    display:none; position:absolute; top:calc(100% + 4px); left:0; right:0; z-index:40;
+    max-height:250px; overflow:auto; background:#fff; border:1px solid var(--panel-line);
+    border-radius:8px; box-shadow:0 6px 18px rgba(10,40,40,0.14);
+  }
+  .type-multi-options.show{ display:block; }
+  .type-multi-option{
+    display:flex; align-items:center; gap:8px; padding:8px 10px; cursor:pointer;
+    border-bottom:1px solid #f0f3f3; font-family:var(--font-mono); font-size:11.5px;
+  }
+  .type-multi-option:last-child{ border-bottom:0; }
+  .type-multi-option:hover{ background:var(--bg-2nd); }
+  .type-multi-option input{ width:auto; height:auto; margin:0; }
+  .type-multi-empty{ padding:9px 10px; color:var(--ink-soft); font-size:11.5px; }
+  .type-multi-hint{ margin-top:4px; color:var(--ink-soft); font-size:10px; }
+
   .suggest-list{
     position:absolute; top:100%; left:0; right:0; margin-top:4px; z-index:20;
     background:#fff; border:1px solid var(--panel-line); border-radius:8px;
@@ -741,7 +775,8 @@
       <div class="jobgrid filter-grid">
         <div class="field"><label>Date From</label><input type="date" id="aDateFrom"></div>
         <div class="field"><label>Date To</label><input type="date" id="aDateTo"></div>
-        <div class="field" style="position:relative;"><label>Type</label><input type="text" id="aType" autocomplete="off" placeholder="Any — e.g. *PVG--3-0450A58" title="Use * to match any characters. Example: *PVG--3-0450A58 combines matching types."><div id="analysisTypeSuggest" class="suggest-list"></div></div>
+        <div class="field" style="position:relative;"><label>Type Entered</label><input type="text" id="aType" autocomplete="off" placeholder="Any — e.g. *PVG--3-0450A58" title="Use * to match any characters. Example: *PVG--3-0450A58 combines matching types."><div id="analysisTypeSuggest" class="suggest-list"></div></div>
+        <div class="field"><label>Type List (Optional)</label><div class="type-multi-select" id="analysisTypeMultiSelect"><div class="type-multi-control" id="analysisTypeMultiControl"><div id="analysisTypeChips" style="display:contents;"></div><input type="text" id="analysisTypeSearch" autocomplete="off" placeholder="Search and select types…"></div><div class="type-multi-options" id="analysisTypeOptions"></div></div><div class="type-multi-hint">Select multiple types to include only those types in this analysis.</div></div>
         <div class="field"><label>Texture</label><select id="aTexture">
           <option value="">All Textures</option>
           <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>
@@ -1333,6 +1368,7 @@ function wireEvents(){
   document.getElementById('aLot').addEventListener('input', applyAnalysisFilters);
   document.getElementById('btnResetAnalysisFilters').addEventListener('click', ()=>{
     ['aDateTo','aType','aLot'].forEach(id=>document.getElementById(id).value='');
+    clearAnalysisTypeSelection();
     document.getElementById('aDateFrom').value = currentMonthStartISO();
     ['aTexture','aSize','aGL','aShift','aKiln','aSortingLine'].forEach(id=>document.getElementById(id).value='');
     applyAnalysisFilters();
@@ -1488,6 +1524,7 @@ function wireTypeAutocomplete(){
   setupTypeAutocomplete('jType', 'typeSuggest', updateDerivedFields);
   setupTypeAutocomplete('fType', 'filterTypeSuggest', ()=>{ autoFillTextureSizeFromType('f'); applyFilters(); });
   setupTypeAutocomplete('aType', 'analysisTypeSuggest', ()=>{ autoFillTextureSizeFromType('a'); applyAnalysisFilters(); });
+  setupAnalysisTypeMultiSelect();
 }
 
 /* DERIVED LOGIC — Size and Texture are read from the Type code, not user-entered */
@@ -2497,11 +2534,122 @@ async function initAnalysis(){
   applyAnalysisFilters();
 }
 
+function getAllAnalysisTypeOptions(){
+  const unique = new Map();
+  const sources = [...TYPE_CODES, ...(window._allRecords || []).map(r=>r.type),
+    ...(window._additionalProductionData || []).map(r=>r.type)];
+  sources.forEach(value=>{
+    const type = String(value || '').trim();
+    if(type && !unique.has(type.toUpperCase())) unique.set(type.toUpperCase(), type);
+  });
+  return [...unique.values()].sort((a,b)=>a.localeCompare(b));
+}
+
+let selectedAnalysisTypes = new Set();
+
+function getSelectedAnalysisTypes(){
+  return [...selectedAnalysisTypes].sort((a,b)=>a.localeCompare(b));
+}
+
+function renderAnalysisTypeOptions(){
+  const input = document.getElementById('analysisTypeSearch');
+  const list = document.getElementById('analysisTypeOptions');
+  if(!input || !list) return;
+  const q = input.value.trim().toUpperCase();
+  const options = getAllAnalysisTypeOptions().filter(type=>!q || type.toUpperCase().includes(q));
+  if(!options.length){
+    list.innerHTML = '<div class="type-multi-empty">No matching types found.</div>';
+    return;
+  }
+  list.replaceChildren();
+  options.forEach(type=>{
+    const label = document.createElement('label');
+    label.className = 'type-multi-option';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = selectedAnalysisTypes.has(type.toUpperCase());
+    checkbox.addEventListener('change', ()=>{
+      const key = type.toUpperCase();
+      if(checkbox.checked) selectedAnalysisTypes.add(key);
+      else selectedAnalysisTypes.delete(key);
+      renderAnalysisTypeChips();
+      renderAnalysisTypeOptions();
+      applyAnalysisFilters();
+    });
+    const span = document.createElement('span');
+    span.textContent = type;
+    label.append(checkbox, span);
+    list.appendChild(label);
+  });
+}
+
+function renderAnalysisTypeChips(){
+  const wrap = document.getElementById('analysisTypeChips');
+  if(!wrap) return;
+  wrap.replaceChildren();
+  getSelectedAnalysisTypes().forEach(type=>{
+    const chip = document.createElement('span');
+    chip.className = 'type-chip';
+    const label = document.createElement('span');
+    label.textContent = type;
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.setAttribute('aria-label', 'Remove ' + type);
+    remove.textContent = '×';
+    remove.addEventListener('click', ()=>{
+      selectedAnalysisTypes.delete(type);
+      renderAnalysisTypeChips();
+      renderAnalysisTypeOptions();
+      applyAnalysisFilters();
+    });
+    chip.append(label, remove);
+    wrap.appendChild(chip);
+  });
+}
+
+function clearAnalysisTypeSelection(){
+  selectedAnalysisTypes.clear();
+  const search = document.getElementById('analysisTypeSearch');
+  if(search) search.value = '';
+  renderAnalysisTypeChips();
+  renderAnalysisTypeOptions();
+}
+
+function setupAnalysisTypeMultiSelect(){
+  const input = document.getElementById('analysisTypeSearch');
+  const control = document.getElementById('analysisTypeMultiControl');
+  const list = document.getElementById('analysisTypeOptions');
+  if(!input || !control || !list || input.dataset.ready) return;
+  input.dataset.ready = '1';
+  input.addEventListener('focus', ()=>{
+    renderAnalysisTypeOptions();
+    list.classList.add('show');
+  });
+  input.addEventListener('input', ()=>{
+    renderAnalysisTypeOptions();
+    list.classList.add('show');
+  });
+  control.addEventListener('click', ()=>{
+    input.focus();
+    renderAnalysisTypeOptions();
+    list.classList.add('show');
+  });
+  document.addEventListener('click', e=>{
+    if(!document.getElementById('analysisTypeMultiSelect').contains(e.target)) list.classList.remove('show');
+  });
+  document.addEventListener('typeSuggestionsChanged', ()=>{
+    if(list.classList.contains('show')) renderAnalysisTypeOptions();
+  });
+  renderAnalysisTypeChips();
+  renderAnalysisTypeOptions();
+}
+
 function getAnalysisFilterValues(){
   return {
     from: document.getElementById('aDateFrom').value,
     to: document.getElementById('aDateTo').value,
     type: document.getElementById('aType').value.trim().toUpperCase(),
+    types: getSelectedAnalysisTypes(),
     texture: document.getElementById('aTexture').value,
     size: document.getElementById('aSize').value,
     gl: document.getElementById('aGL').value,
@@ -2532,7 +2680,7 @@ function buildAnalysisFilterMeta(f){
     gl: f.gl || 'All Glazing Lines',
     kiln: f.kiln || 'All Kilns',
     shift: f.shift ? shiftLabels[f.shift] : 'All Shifts',
-    type: f.type || 'All Types',
+    type: f.types.length ? f.types.join(', ') : (f.type || 'All Types'),
     texture: f.texture || 'All Textures',
     size: f.size || 'All Sizes',
     lot: f.lot || 'All Lots',
@@ -2546,7 +2694,9 @@ function applyAnalysisFilters(){
   const filtered = list.filter(r=>{
     if(f.from && r.date < f.from) return false;
     if(f.to && r.date > f.to) return false;
-    if(!matchesTypeFilter(r.type, f.type)) return false;
+    if(f.types.length){
+      if(!f.types.includes(String(r.type || '').trim().toUpperCase())) return false;
+    }else if(!matchesTypeFilter(r.type, f.type)) return false;
     if(f.texture && r.texture !== f.texture) return false;
     if(f.size && r.size !== f.size) return false;
     if(f.gl && r.gl !== f.gl) return false;
