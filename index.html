@@ -1049,7 +1049,7 @@
         </button>
         <button class="ai-question" data-q="variation">
           <span class="ai-q-icon">📉</span>
-          <span>Last 10 days — specific defect variation (line chart)</span>
+          <span>Specific defect variation — selectable date range (line chart)</span>
         </button>
         <button class="ai-question" data-q="squaring">
           <span class="ai-q-icon">⚙️</span>
@@ -3279,7 +3279,7 @@ const AI_QUESTION_TITLES = {
   'last10': "Last 10 Days' Quality Issues",
   'recurring-damage': "Recurring Problem Defects — Damage",
   'recurring-cgrade': "Recurring Problem Defects — C Grade",
-  'variation': "Defect Variation — Last 10 Days",
+  'variation': "Specific Defect Variation",
   'squaring': "Squaring Machine Defects — Last 10 Days"
 };
 
@@ -3637,6 +3637,14 @@ function renderAIVariationSetup(){
     </div>
     <div class="ai-variation-controls">
       <div class="field">
+        <label>Date From</label>
+        <input type="date" id="aiVariationDateFrom" value="${currentMonthStartISO()}">
+      </div>
+      <div class="field">
+        <label>Date To</label>
+        <input type="date" id="aiVariationDateTo" value="${isoDaysAgo(0)}">
+      </div>
+      <div class="field">
         <label>Choose a defect</label>
         <select id="aiVariationDefect"><option value="">Select a defect…</option>${options}</select>
       </div>
@@ -3670,10 +3678,22 @@ async function renderAIVariationChart(itemName){
   const wrap = document.getElementById('aiVariationChartWrap');
   wrap.innerHTML = '<div class="ai-loading">Loading…</div>';
   const item = AI_VARIATION_ITEMS.find(x=>x.name===itemName);
-  const from = isoDaysAgo(9), to = isoDaysAgo(0); // last 10 calendar days including today
+  const from = document.getElementById('aiVariationDateFrom').value;
+  const to = document.getElementById('aiVariationDateTo').value;
+  if(!from || !to){
+    wrap.innerHTML = '<div class="ai-summary-line">Please select both Date From and Date To.</div>';
+    return;
+  }
+  if(from > to){
+    wrap.innerHTML = '<div class="ai-summary-line">Date From cannot be later than Date To. Please correct the selected range.</div>';
+    return;
+  }
 
   const days = [];
-  for(let i=9; i>=0; i--) days.push(isoDaysAgo(i));
+  for(let d=new Date(from+'T12:00:00'); d<=new Date(to+'T12:00:00'); d.setDate(d.getDate()+1)){
+    const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0');
+    days.push(`${y}-${m}-${day}`);
+  }
 
   const f = getAIVariationFilters();
   const records = (await getAIRecordsInRange(from, to)).filter(r=>{
@@ -3699,8 +3719,9 @@ async function renderAIVariationChart(itemName){
   });
 
   const hasAnyData = cSeries.some(v=>v>0) || damSeries.some(v=>v>0);
-  wrap.innerHTML = `<div class="chart-box" style="margin-top:16px;"><canvas id="aiVariationCanvas"></canvas></div>` +
-    (hasAnyData ? '' : `<div class="ai-summary-line" style="margin-top:10px;">No recorded data for "${itemName}" in the last 10 days — both lines below will be flat at zero.</div>`);
+  const rangeLabel = `${formatDateDMY(from)} – ${formatDateDMY(to)}`;
+  wrap.innerHTML = `<div class="ai-summary-line" style="margin-top:10px;">Showing ${itemName} from ${rangeLabel} (${days.length} calendar days).</div><div class="chart-box" style="margin-top:12px;"><canvas id="aiVariationCanvas"></canvas></div>` +
+    (hasAnyData ? '' : `<div class="ai-summary-line" style="margin-top:10px;">No recorded data for "${itemName}" in the selected date range — the chart will show zero values.</div>`);
 
   const datasets = [];
   if(item.type !== 'dam-sub'){
