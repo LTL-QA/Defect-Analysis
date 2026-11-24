@@ -306,7 +306,13 @@
   #balancingTable tbody tr.bal-incomplete .bal-input{ border-color:#d9a64b; background:#fffaf1; }
   .bal-missing-note{ font-size:11px; color:var(--amber); font-weight:700; margin-top:4px; }
   .additional-production{ margin-top:20px; border-top:1px solid var(--panel-line); padding-top:18px; }
-  .additional-production h3{ margin:0 0 6px; font-size:13px; color:var(--teal-deep); }
+  .additional-heading{ display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:6px; }
+  .additional-production h3{ margin:0; font-size:13px; color:var(--teal-deep); }
+  .additional-yield{ font-size:12px; font-weight:700; color:var(--good); background:#edf7f1; border:1px solid #cce8d7; border-radius:7px; padding:7px 10px; }
+  .additional-summary{ display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; margin:12px 0 16px; }
+  .additional-summary-item{ min-width:0; border:1px solid var(--panel-line); border-radius:8px; padding:10px; background:#fbfcfc; }
+  .additional-summary-label{ font-size:10px; color:var(--ink-soft); font-weight:700; text-transform:uppercase; letter-spacing:.03em; }
+  .additional-summary-value{ margin-top:5px; font-family:var(--font-mono); font-size:16px; font-weight:700; color:var(--ink); overflow-wrap:anywhere; }
   .additional-production .subtext{ margin:0 0 14px; font-size:11.5px; color:var(--ink-soft); line-height:1.5; }
   .additional-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px; align-items:end; }
   .additional-grid .field{ position:relative; }
@@ -433,6 +439,7 @@
     #aiSquaringChartWrap .chart-box{ height:280px; }
     .bal-summary{ grid-template-columns:1fr; width:100%; max-width:none; }
     .additional-grid{ grid-template-columns:1fr 1fr; }
+    .additional-summary{ grid-template-columns:repeat(2,minmax(0,1fr)); }
   }
 
   /* ---------- Login Screen ---------- */
@@ -1019,8 +1026,18 @@
       <div id="balancingNote" style="font-size:12px; color:var(--ink-soft); margin-top:10px;"></div>
 
       <div class="additional-production">
-        <h3>Additional Production</h3>
+        <div class="additional-heading">
+          <h3>Additional Production</h3>
+          <div class="additional-yield" id="additionalProductionYield">Additional Production Yield: 0.0%</div>
+        </div>
         <p class="subtext">Add month-end barcoded production that has no daily defect-inspection record. Size, Texture and Kiln are derived automatically and stored for cumulative Dashboard / Defect Analysis calculations.</p>
+        <div class="additional-summary" id="additionalProductionSummary">
+          <div class="additional-summary-item"><div class="additional-summary-label">Total First Grade</div><div class="additional-summary-value" id="additionalTotalFirst">0.00</div></div>
+          <div class="additional-summary-item"><div class="additional-summary-label">Total Second Grade</div><div class="additional-summary-value" id="additionalTotalSecond">0.00</div></div>
+          <div class="additional-summary-item"><div class="additional-summary-label">Total C Grade</div><div class="additional-summary-value" id="additionalTotalCGrade">0.00</div></div>
+          <div class="additional-summary-item"><div class="additional-summary-label">Total Damage</div><div class="additional-summary-value" id="additionalTotalDamage">0.00</div></div>
+          <div class="additional-summary-item"><div class="additional-summary-label">Total Production</div><div class="additional-summary-value" id="additionalTotalProduction">0.00</div></div>
+        </div>
         <div class="additional-grid">
           <div class="field"><label>Month</label><input type="month" id="addProdMonth"></div>
           <div class="field" style="position:relative;"><label>Type</label><input type="text" id="addProdType" autocomplete="off" placeholder="Enter Type code"><div id="addProdTypeSuggest" class="suggest-list"></div></div>
@@ -2448,9 +2465,29 @@ function clearAdditionalProductionForm(){
   renderAdditionalProductionTable(balMonth);
 }
 
+function updateAdditionalProductionSummary(monthKey){
+  const list=(window._additionalProductionData||[]).filter(a=>a.month===monthKey);
+  const totals=list.reduce((sum,a)=>{
+    sum.first+=(+a.firstGrade||0);
+    sum.second+=(+a.secondGrade||0);
+    sum.cGrade+=(+a.cGrade||0);
+    sum.damage+=(+a.damage||0);
+    return sum;
+  },{first:0,second:0,cGrade:0,damage:0});
+  const total=totals.first+totals.second+totals.cGrade+totals.damage;
+  const yieldPct=total>0?((totals.first+totals.second)/total)*100:0;
+  document.getElementById('additionalTotalFirst').textContent=totals.first.toFixed(2);
+  document.getElementById('additionalTotalSecond').textContent=totals.second.toFixed(2);
+  document.getElementById('additionalTotalCGrade').textContent=totals.cGrade.toFixed(2);
+  document.getElementById('additionalTotalDamage').textContent=totals.damage.toFixed(2);
+  document.getElementById('additionalTotalProduction').textContent=total.toFixed(2);
+  document.getElementById('additionalProductionYield').textContent='Additional Production Yield: '+yieldPct.toFixed(1)+'%';
+}
+
 function renderAdditionalProductionTable(monthKey){
   const body=document.getElementById('additionalProductionBody');
   if(!body) return;
+  updateAdditionalProductionSummary(monthKey);
   const list=(window._additionalProductionData||[]).filter(a=>a.month===monthKey).sort((a,b)=>(a.type||'').localeCompare(b.type||''));
   if(!list.length){
     body.innerHTML='<tr><td colspan="10" style="color:var(--ink-soft)">No additional production saved for this month.</td></tr>';
